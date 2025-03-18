@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
 
 // Get the repository name or use custom path for production
 const getBasePath = () => {
@@ -28,6 +29,23 @@ export default defineConfig({
           vendor: ['react', 'react-dom', 'react-router-dom'],
           ui: ['react-markdown', 'file-saver', 'fuse.js'],
         }
+      }
+    }
+  },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+    }
+  },
+  define: {
+    // Fix for crypto.getRandomValues in Node.js environment
+    'process.env': {}
+  },
+  // Handle crypto for GitHub Actions build
+  optimizeDeps: {
+    esbuildOptions: {
+      define: {
+        global: 'globalThis'
       }
     }
   }
