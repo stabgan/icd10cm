@@ -61,6 +61,7 @@ jobs:
         env:
           # Add polyfill for crypto.getRandomValues
           NODE_ENV: production
+          GITHUB_PAGES: 'true'
 
       - name: Prepare for deployment
         run: |
