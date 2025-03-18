@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Page Not Found</title>
+  <script>
+    // SPA routing fix for GitHub Pages
+    // Redirects 404s to index.html with the original URL as a query parameter
+    const pathSegmentsToKeep = 1; // Adjust based on your repository structure
+    const l = window.location;
+    
+    const repoName = l.pathname.split('/')[1]; // Extract repository name
+    const remainingPath = l.pathname
+      .split('/')
+      .slice(pathSegmentsToKeep + 1)
+      .join('/');
+    
+    const redirectUrl = 
+      l.protocol + '//' + l.hostname + 
+      (l.port ? ':' + l.port : '') + '/' + 
+      repoName + '/?p=/' + remainingPath +
+      (l.search ? '&q=' + l.search.slice(1) : '') + 
+      (l.hash || '');
+    
+    sessionStorage.setItem('redirect', remainingPath);
+    window.location.replace(redirectUrl);
+  </script>
+</head>
+<body>
+  <h1>Page Not Found</h1>
+  <p>Redirecting to the homepage...</p>
+</body>
+</html> 

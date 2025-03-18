@@ -1,4 +1,4 @@
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import HomePage from './pages/HomePage';
 import CodeDetailPage from './pages/CodeDetailPage';
@@ -6,6 +6,31 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import LoadingScreen from './components/LoadingScreen';
 import { useTheme } from './contexts/ThemeContext';
+
+// Helper component to check for GitHub Pages redirects
+const GithubPagesRedirectHandler = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  useEffect(() => {
+    // Check if we have a redirect from 404.html
+    const redirect = sessionStorage.getItem('redirect');
+    if (redirect && redirect !== location.pathname) {
+      // Clear the redirect param and navigate
+      sessionStorage.removeItem('redirect');
+      navigate(redirect);
+    }
+    
+    // Check for query param redirect from GitHub Pages
+    const query = new URLSearchParams(location.search);
+    const path = query.get('p');
+    if (path) {
+      navigate(path);
+    }
+  }, [navigate, location]);
+  
+  return null;
+};
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -46,8 +71,20 @@ function App() {
     return <LoadingScreen message="Loading ICD-10-CM Code Browser..." />;
   }
 
+  // Get the base URL for GitHub Pages
+  const getBasename = () => {
+    // In development, use root
+    if (process.env.NODE_ENV !== 'production') {
+      return '/';
+    }
+    
+    // In production, use the repository name (from vite.config.js)
+    return '/icd10cm';
+  };
+
   return (
-    <Router>
+    <Router basename={getBasename()}>
+      <GithubPagesRedirectHandler />
       <div className={`min-h-screen flex flex-col ${
         darkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'
       } transition-colors duration-300`}>
