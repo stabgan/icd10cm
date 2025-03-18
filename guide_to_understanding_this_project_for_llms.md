@@ -6,6 +6,11 @@ This guide provides a detailed overview of the ICD-10-CM Browser application, de
 
 The ICD-10-CM Browser is a React-based web application that allows users to search and browse International Classification of Diseases, 10th Revision, Clinical Modification (ICD-10-CM) codes. It operates entirely client-side, using browser storage (IndexedDB) to process and store large medical datasets without requiring a server.
 
+### Repository Information
+- **Repository**: [https://github.com/stabgan/icd10cm](https://github.com/stabgan/icd10cm)
+- **Primary Branch**: main
+- **CI/CD**: GitHub Actions handles testing (see `.github/workflows/test.yml`)
+
 ### Key Capabilities
 - Process large JSONL files (up to 1.2GB) directly in the browser
 - Store and index medical code data for efficient searching
