@@ -6,22 +6,9 @@ import path from 'path'
 
 // Get the repository name or use custom path for production
 const getBasePath = () => {
-  // Check for specific environment variables for GitHub Pages deployment
-  if (process.env.GITHUB_PAGES === 'true') {
-    return '/icd10cm/';
-  }
-  
-  // For production builds with custom domain, check if in production
+  // Always use /icd10cm/ for production builds
   if (process.env.NODE_ENV === 'production') {
-    // If a CNAME file exists, assume we're using a custom domain
-    try {
-      if (fs.existsSync(path.resolve('public', 'CNAME'))) {
-        return '/';
-      }
-      return '/icd10cm/';
-    } catch (e) {
-      return '/icd10cm/';
-    }
+    return '/icd10cm/';
   }
   
   // Default for development
@@ -69,9 +56,15 @@ export default defineConfig({
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
         assetFileNames: (assetInfo) => {
-          // Special handling for JSON files to ensure they go to data directory
-          if (assetInfo.name && assetInfo.name.endsWith('.json')) {
-            return 'data/[name][extname]';
+          // Keep data files in their original structure with original names
+          if (assetInfo.name && (assetInfo.name.endsWith('.json') || assetInfo.name.includes('data/'))) {
+            const parts = assetInfo.name.split('/');
+            const fileName = parts[parts.length - 1];
+            if (parts.includes('data')) {
+              // Preserve the full path for data files
+              return assetInfo.name;
+            }
+            return `data/${fileName}`;
           }
           return 'assets/[ext]/[name]-[hash].[ext]';
         }

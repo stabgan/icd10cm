@@ -59,8 +59,22 @@ function App() {
         const basePath = import.meta.env.BASE_URL || '/';
         // Ensure basePath ends with a slash
         const normalizedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`;
-        // Construct the full URL for the data file - fixed URL construction
-        const dataUrl = new URL('data/index.json', `${window.location.origin}${normalizedBasePath}`).href;
+        
+        // Construct the full URL for the data file
+        const dataPath = 'data/index.json';
+        let dataUrl;
+        
+        // Handle different environments
+        if (window.location.hostname === 'stabgan.com') {
+          // For custom domain
+          dataUrl = `${window.location.origin}/icd10cm/${dataPath}`;
+        } else if (window.location.hostname.includes('github.io')) {
+          // For GitHub Pages
+          dataUrl = `${window.location.origin}/icd10cm/${dataPath}`;
+        } else {
+          // For development
+          dataUrl = `${window.location.origin}${normalizedBasePath}${dataPath}`;
+        }
         
         console.log('Fetching data from:', dataUrl);
         const response = await fetch(dataUrl);
