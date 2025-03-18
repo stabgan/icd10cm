@@ -17,9 +17,25 @@ function CodeDetailPage() {
         setLoading(true);
         setError(null);
         
-        // Create a proper URL that respects the base path
-        const basePath = import.meta.env.BASE_URL || '/';
-        const indexUrl = new URL('data/index.json', window.location.origin + basePath).href;
+        // Construct proper URLs for different environments
+        const dataPath = 'data/index.json';
+        let indexUrl;
+        
+        // Handle different environments consistently
+        if (window.location.hostname === 'stabgan.com') {
+          // For custom domain
+          indexUrl = `${window.location.origin}/icd10cm/${dataPath}`;
+        } else if (window.location.hostname.includes('github.io')) {
+          // For GitHub Pages
+          indexUrl = `${window.location.origin}/icd10cm/${dataPath}`;
+        } else {
+          // For development
+          const basePath = import.meta.env.BASE_URL || '/';
+          const normalizedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`;
+          indexUrl = `${window.location.origin}${normalizedBasePath}${dataPath}`;
+        }
+        
+        console.log("Fetching index from:", indexUrl);
         
         // Get the index file to know where to look for this code
         const indexResponse = await fetch(indexUrl);
@@ -35,7 +51,17 @@ function CodeDetailPage() {
           
           // Check if we have data for this character
           if (indexData.chunkMap && indexData.chunkMap[firstChar]) {
-            const chunkUrl = new URL(`data/chunks/${firstChar}.json`, window.location.origin + basePath).href;
+            // Construct the chunk URL using the same pattern as index URL
+            let chunkUrl;
+            if (window.location.hostname === 'stabgan.com' || window.location.hostname.includes('github.io')) {
+              chunkUrl = `${window.location.origin}/icd10cm/data/chunks/${firstChar}.json`;
+            } else {
+              const basePath = import.meta.env.BASE_URL || '/';
+              const normalizedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`;
+              chunkUrl = `${window.location.origin}${normalizedBasePath}data/chunks/${firstChar}.json`;
+            }
+            
+            console.log("Fetching chunk from:", chunkUrl);
             const chunkResponse = await fetch(chunkUrl);
             if (!chunkResponse.ok) {
               throw new Error(`Failed to load chunk data for codes starting with '${firstChar}'`);
