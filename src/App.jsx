@@ -6,6 +6,8 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import LoadingScreen from './components/LoadingScreen';
 import { useTheme } from './contexts/ThemeContext';
+import { checkDataLoaded, getIndexData } from './utils/dataProcessor';
+import SplashScreen from './components/SplashScreen';
 
 // Helper component to check for GitHub Pages redirects
 const GithubPagesRedirectHandler = () => {
@@ -49,67 +51,85 @@ const GithubPagesRedirectHandler = () => {
 function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [dataStatus, setDataStatus] = useState({ loaded: false, error: null });
+  const [needsDataUpload, setNeedsDataUpload] = useState(false);
   const { darkMode } = useTheme();
 
   useEffect(() => {
     // Check if the data is available
     const checkDataAvailability = async () => {
       try {
-        // Get the base URL for the current environment
-        const basePath = import.meta.env.BASE_URL || '/';
-        // Ensure basePath ends with a slash
-        const normalizedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`;
+        // First check if we have data in IndexedDB
+        const dataLoaded = await checkDataLoaded();
         
-        // Construct the full URL for the data file
-        const dataPath = 'data/index.json';
-        let dataUrl;
-        
-        // Handle different environments
-        if (window.location.hostname === 'stabgan.com') {
-          // For custom domain
-          dataUrl = `${window.location.origin}/icd10cm/${dataPath}`;
-        } else if (window.location.hostname.includes('github.io')) {
-          // For GitHub Pages
-          dataUrl = `${window.location.origin}/icd10cm/${dataPath}`;
-        } else {
-          // For development
-          dataUrl = `${window.location.origin}${normalizedBasePath}${dataPath}`;
-        }
-        
-        console.log('Fetching data from:', dataUrl);
-        
-        try {
-          const response = await fetch(dataUrl);
-          if (!response.ok) {
-            throw new Error("Data not available");
-          }
-          
-          const data = await response.json();
+        if (dataLoaded) {
+          // If data is loaded in IndexedDB, use it
+          const indexData = await getIndexData();
           setDataStatus({ 
             loaded: true, 
-            totalCodes: data.totalCodes || 0, 
-            chunkCount: data.chunkCount || 0,
-            lastUpdated: data.lastUpdated || new Date().toISOString(),
-            dataAvailable: data.totalCodes > 0
+            totalCodes: indexData.totalCodes || 0, 
+            chunkCount: indexData.chunkCount || 0,
+            lastUpdated: indexData.lastUpdated || new Date().toISOString(),
+            dataAvailable: true
           });
-        } catch (fetchError) {
-          console.error('Error fetching data:', fetchError);
-          // Set loaded status but with dataAvailable=false
-          setDataStatus({
-            loaded: true,
-            totalCodes: 0,
-            chunkCount: 0,
-            lastUpdated: new Date().toISOString(),
-            dataAvailable: false,
-            error: 'Data files are being prepared. Please check back later.'
-          });
+          setNeedsDataUpload(false);
+        } else {
+          // No data in IndexedDB, check if we have pre-packaged data
+          try {
+            // Try to get the base URL for the current environment
+            const basePath = import.meta.env.BASE_URL || '/';
+            // Ensure basePath ends with a slash
+            const normalizedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`;
+            
+            // Construct the full URL for the data file
+            const dataPath = 'data/index.json';
+            let dataUrl;
+            
+            // Handle different environments
+            if (window.location.hostname === 'stabgan.com') {
+              // For custom domain
+              dataUrl = `${window.location.origin}/icd10cm/${dataPath}`;
+            } else if (window.location.hostname.includes('github.io')) {
+              // For GitHub Pages
+              dataUrl = `${window.location.origin}/icd10cm/${dataPath}`;
+            } else {
+              // For development
+              dataUrl = `${window.location.origin}${normalizedBasePath}${dataPath}`;
+            }
+            
+            console.log('Checking for pre-packaged data at:', dataUrl);
+            
+            const response = await fetch(dataUrl);
+            if (!response.ok) {
+              throw new Error("Pre-packaged data not available");
+            }
+            
+            const data = await response.json();
+            
+            if (data.totalCodes > 0) {
+              // We have valid pre-packaged data
+              setDataStatus({ 
+                loaded: true, 
+                totalCodes: data.totalCodes, 
+                chunkCount: data.chunkCount,
+                lastUpdated: data.lastUpdated,
+                dataAvailable: true
+              });
+              setNeedsDataUpload(false);
+            } else {
+              // Pre-packaged data exists but is empty/placeholder
+              console.log('Pre-packaged data is empty, need user to upload data');
+              setNeedsDataUpload(true);
+            }
+          } catch (fetchError) {
+            // No pre-packaged data available, need user to upload
+            console.log('No pre-packaged data available, need user to upload data');
+            setNeedsDataUpload(true);
+          }
         }
       } catch (error) {
-        console.error('Failed to load data:', error);
-        setDataStatus({ 
-          loaded: false, 
-          error: 'Failed to load ICD-10 code data. Please make sure the data files are properly processed.' 
-        });
+        console.error('Failed to check data availability:', error);
+        // Something went wrong, ask user to upload data
+        setNeedsDataUpload(true);
       } finally {
         // Simulate a minimum loading time for better UX
         setTimeout(() => setIsLoading(false), 800);
@@ -121,6 +141,10 @@ function App() {
 
   if (isLoading) {
     return <LoadingScreen message="Loading ICD-10-CM Code Browser..." />;
+  }
+  
+  if (needsDataUpload) {
+    return <SplashScreen />;
   }
 
   // Get the base URL for GitHub Pages

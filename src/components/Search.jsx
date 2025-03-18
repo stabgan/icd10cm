@@ -2,66 +2,17 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import Fuse from 'fuse.js';
+import { searchCodes } from '../utils/dataProcessor';
 
 function Search({ onSearchResults }) {
   const [query, setQuery] = useState('');
-  const [searchIndex, setSearchIndex] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [focused, setFocused] = useState(false);
   const inputRef = useRef(null);
   const suggestionsRef = useRef(null);
   const navigate = useNavigate();
   const { darkMode } = useTheme();
-
-  // Load search index
-  useEffect(() => {
-    const loadSearchIndex = async () => {
-      try {
-        setLoading(true);
-        // Create a proper URL that respects the base path
-        const basePath = import.meta.env.BASE_URL || '/';
-        const searchIndexUrl = new URL('data/search-index.json', window.location.origin + basePath).href;
-        
-        const response = await fetch(searchIndexUrl);
-        
-        if (!response.ok) {
-          throw new Error('Failed to load search index');
-        }
-        
-        const data = await response.json();
-        
-        // Create Fuse.js index with improved configuration
-        const fuse = new Fuse(data, {
-          // Perform search on these keys
-          keys: [
-            { name: 'code', weight: 2 }, // Give code higher weight
-            { name: 'description', weight: 1 }
-          ],
-          // More lenient threshold (0.6 instead of 0.3) to catch more matches
-          threshold: 0.6,
-          // Include the score so we can sort by relevance
-          includeScore: true,
-          // Use advanced search for better partial matching
-          useExtendedSearch: true,
-          // Allow fuzzy matching to catch typos and variations
-          ignoreLocation: true,
-          // Allow matches anywhere in the string
-          distance: 1000,
-          // More emphasis on finding something vs accuracy
-          findAllMatches: true
-        });
-        
-        setSearchIndex(fuse);
-        setLoading(false);
-      } catch (error) {
-        console.error('Failed to load search index:', error);
-        setLoading(false);
-      }
-    };
-    
-    loadSearchIndex();
-  }, []);
 
   // Handle click outside to close suggestions
   useEffect(() => {
@@ -83,8 +34,8 @@ function Search({ onSearchResults }) {
 
   // Debounced search function
   const debouncedSearch = useCallback(
-    (value) => {
-      if (!searchIndex || !value.trim()) {
+    async (value) => {
+      if (!value.trim()) {
         setSuggestions([]);
         if (onSearchResults) {
           onSearchResults([]);
@@ -92,34 +43,26 @@ function Search({ onSearchResults }) {
         return;
       }
       
-      let results;
+      setLoading(true);
       
-      // For exact code search, try direct search first
-      if (/^[A-Z]\d+(\.\d+)?$/i.test(value)) {
-        // If it looks like a code, try finding exact matches first
-        results = searchIndex.search(`=${value}`);
+      try {
+        // Search using the dataProcessor utility
+        const results = await searchCodes(value);
         
-        // If no exact match, fallback to fuzzy
-        if (results.length === 0) {
-          results = searchIndex.search(value);
+        // Update suggestions (top 10)
+        setSuggestions(results.slice(0, 10));
+        
+        // Update search results (all results)
+        if (onSearchResults) {
+          onSearchResults(results);
         }
-      } else {
-        // For regular text search
-        results = searchIndex.search(value);
-      }
-      
-      // Sort results by score (lower is better)
-      results.sort((a, b) => a.score - b.score);
-      
-      // Update suggestions (top 10)
-      setSuggestions(results.slice(0, 10).map(result => result.item));
-      
-      // Update search results (top 100)
-      if (onSearchResults) {
-        onSearchResults(results.slice(0, 100).map(result => result.item));
+      } catch (error) {
+        console.error('Error searching codes:', error);
+      } finally {
+        setLoading(false);
       }
     },
-    [searchIndex, onSearchResults]
+    [onSearchResults]
   );
 
   // Handle input change with debounce
