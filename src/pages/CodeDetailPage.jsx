@@ -17,8 +17,12 @@ function CodeDetailPage() {
         setLoading(true);
         setError(null);
         
+        // Create a proper URL that respects the base path
+        const basePath = import.meta.env.BASE_URL || '/';
+        const indexUrl = new URL('data/index.json', window.location.origin + basePath).href;
+        
         // Get the index file to know where to look for this code
-        const indexResponse = await fetch('./data/index.json');
+        const indexResponse = await fetch(indexUrl);
         if (!indexResponse.ok) {
           throw new Error('Failed to load index data');
         }
@@ -31,7 +35,8 @@ function CodeDetailPage() {
           
           // Check if we have data for this character
           if (indexData.chunkMap && indexData.chunkMap[firstChar]) {
-            const chunkResponse = await fetch(`./data/chunks/${firstChar}.json`);
+            const chunkUrl = new URL(`data/chunks/${firstChar}.json`, window.location.origin + basePath).href;
+            const chunkResponse = await fetch(chunkUrl);
             if (!chunkResponse.ok) {
               throw new Error(`Failed to load chunk data for codes starting with '${firstChar}'`);
             }

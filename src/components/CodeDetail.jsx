@@ -18,8 +18,12 @@ function CodeDetail() {
         setLoading(true);
         setError(null);
 
+        // Create proper URLs that respect the base path
+        const basePath = import.meta.env.BASE_URL || '/';
+        const indexUrl = new URL('data/index.json', window.location.origin + basePath).href;
+        
         // Determine the correct chunk file to load
-        const response = await fetch('/data/index.json');
+        const response = await fetch(indexUrl);
         
         if (!response.ok) {
           throw new Error('Failed to load index file');
@@ -30,7 +34,8 @@ function CodeDetail() {
         const chunkFile = chunkMap[codeId.charAt(0)] || '0';
         
         // Load the chunk containing our code
-        const chunkResponse = await fetch(`/data/chunks/${chunkFile}.json`);
+        const chunkUrl = new URL(`data/chunks/${chunkFile}.json`, window.location.origin + basePath).href;
+        const chunkResponse = await fetch(chunkUrl);
         
         if (!chunkResponse.ok) {
           throw new Error(`Failed to load chunk ${chunkFile}`);

@@ -6,10 +6,25 @@ import path from 'path'
 
 // Get the repository name or use custom path for production
 const getBasePath = () => {
-  // For production builds with custom domain, use '/icd10cm/'
-  if (process.env.NODE_ENV === 'production') {
+  // Check for specific environment variables for GitHub Pages deployment
+  if (process.env.GITHUB_PAGES === 'true') {
     return '/icd10cm/';
   }
+  
+  // For production builds with custom domain, check if in production
+  if (process.env.NODE_ENV === 'production') {
+    // If a CNAME file exists, assume we're using a custom domain
+    try {
+      if (fs.existsSync(path.resolve('public', 'CNAME'))) {
+        return '/';
+      }
+      return '/icd10cm/';
+    } catch (e) {
+      return '/icd10cm/';
+    }
+  }
+  
+  // Default for development
   return '/';
 };
 
@@ -64,6 +79,8 @@ export default defineConfig({
     'process.env': {},
     // Ensure global and window are defined
     global: 'globalThis',
+    // Explicitly make BASE_URL available to the application
+    '__APP_BASE_PATH__': JSON.stringify(getBasePath())
   },
   // Handle crypto for GitHub Actions build
   optimizeDeps: {

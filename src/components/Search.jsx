@@ -19,7 +19,11 @@ function Search({ onSearchResults }) {
     const loadSearchIndex = async () => {
       try {
         setLoading(true);
-        const response = await fetch('./data/search-index.json');
+        // Create a proper URL that respects the base path
+        const basePath = import.meta.env.BASE_URL || '/';
+        const searchIndexUrl = new URL('data/search-index.json', window.location.origin + basePath).href;
+        
+        const response = await fetch(searchIndexUrl);
         
         if (!response.ok) {
           throw new Error('Failed to load search index');
@@ -243,4 +247,4 @@ function Search({ onSearchResults }) {
   );
 }
 
-export default Search; 
+export default Search;

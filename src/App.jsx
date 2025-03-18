@@ -55,10 +55,14 @@ function App() {
     // Check if the data is available
     const checkDataAvailability = async () => {
       try {
-        const response = await fetch('./data/index.json');
-        if (!response.ok) {
-          throw new Error('Data not available');
-        }
+        // Create a proper URL that respects the base path
+        const basePath = import.meta.env.BASE_URL || '/';
+        const dataUrl = new URL('data/index.json', window.location.origin + basePath).href;
+        
+        console.log('Fetching data from:', dataUrl);
+        const response = await fetch(dataUrl);
+        if (!response.ok)
+          throw new Error("Data not available");
         const data = await response.json();
         setDataStatus({ 
           loaded: true, 
