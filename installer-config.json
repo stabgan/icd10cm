@@ -1,0 +1,11 @@
+{
+  "name": "icd10cm-browser",
+  "productName": "ICD-10-CM Browser",
+  "description": "A desktop application for browsing and searching ICD-10-CM diagnosis codes",
+  "version": "0.1.0",
+  "authors": ["Kaustabh"],
+  "exe": "icd10cm-browser.exe",
+  "setupExe": "ICD-10-CM-Browser-Setup.exe",
+  "noMsi": true,
+  "setupMsi": "ICD-10-CM-Browser-Setup.msi"
+} 

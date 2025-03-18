@@ -1,0 +1,47 @@
+appId: com.icd10cm.browser
+productName: ICD-10-CM Browser
+copyright: Copyright © 2023 Kaustabh
+
+directories:
+  output: release-builds
+  buildResources: build
+
+files:
+  - dist/
+  - server.js
+  - electron/
+  - node_modules/
+  - package.json
+
+extraResources:
+  - "server.js"
+  - "dist"
+
+asarUnpack:
+  - "node_modules/mongodb"
+
+forceCodeSigning: false
+
+win:
+  target:
+    - nsis
+  artifactName: ${productName}-Setup-${version}.${ext}
+  icon: build/icons/icon.png
+  publisherName: "Kaustabh"
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: "ICD-10-CM Browser"
+
+mac:
+  target: dmg
+  category: public.app-category.medical
+  icon: build/icons/icon.png
+
+linux:
+  target:
+    - AppImage
+  category: Medical
+  icon: build/icons/icon.png 

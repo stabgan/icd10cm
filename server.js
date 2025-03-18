@@ -118,6 +118,78 @@ app.get('/api/processing-status', (req, res) => {
   });
 });
 
+// Add endpoint to reset database and reload data from a file
+app.post('/api/reset-database', async (req, res) => {
+  // Check if a file has been uploaded previously
+  try {
+    const db = await connectToMongo();
+    
+    if (!db) {
+      return res.status(500).json({ 
+        error: 'Failed to connect to MongoDB',
+        success: false
+      });
+    }
+    
+    // Find last processed file info from indexMetaCollection
+    const indexCollection = db.collection(indexMetaCollection);
+    const indexData = await indexCollection.findOne({ id: 'main' });
+    
+    if (!indexData) {
+      return res.status(404).json({ 
+        error: 'No data has been loaded before, cannot reset',
+        success: false
+      });
+    }
+    
+    // Store processing status
+    processingStatus = {
+      inProgress: true,
+      progress: 0,
+      message: 'Resetting database...',
+      error: null
+    };
+    
+    // Return immediately with acknowledgment
+    res.status(200).json({ 
+      message: 'Database reset started',
+      status: 'processing'
+    });
+    
+    // Reset database in background (reuse same function that processes uploads)
+    const collection = db.collection(codesCollection);
+    await collection.deleteMany({});
+    await indexCollection.deleteMany({});
+    
+    // Check if the last uploaded file data exists in processingStatus
+    if (processingStatus.fileData && processingStatus.fileData.path && fs.existsSync(processingStatus.fileData.path)) {
+      processFileInBackground(processingStatus.fileData.path);
+    } else {
+      processingStatus = {
+        inProgress: false,
+        progress: 0,
+        message: 'Reset completed but no previous file data found to reload',
+        error: null
+      };
+    }
+  } catch (error) {
+    console.error('Error resetting database:', error);
+    processingStatus = {
+      inProgress: false,
+      progress: 0,
+      message: 'Error resetting database',
+      error: error.message
+    };
+    
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Error resetting database: ' + error.message,
+        success: false
+      });
+    }
+  }
+});
+
 // Process file in background
 async function processFileInBackground(filePath) {
   const db = await connectToMongo();
@@ -200,6 +272,21 @@ async function processFileInBackground(filePath) {
     processingStatus.progress = 99;
     await collection.createIndex({ code: 1 });
     await collection.createIndex({ description: "text" });
+    // Add additional indexes for enhanced search
+    await collection.createIndex({ "detail_context": "text" });
+    // Compound text index on multiple fields
+    await collection.createIndex({ 
+      code: "text", 
+      description: "text", 
+      detail_context: "text" 
+    }, {
+      weights: {
+        code: 10,        // Highest priority
+        description: 5,   // Medium priority
+        detail_context: 2 // Lower priority
+      },
+      name: "comprehensive_search_index"
+    });
     
     // Store metadata
     await indexCollection.insertOne({
@@ -260,10 +347,38 @@ app.get('/api/check-data', async (req, res) => {
     res.json({ 
       dataLoaded: !!indexData,
       totalCodes: indexData ? indexData.totalCodes : 0,
-      lastUpdated: indexData ? indexData.lastUpdated : null
+      lastUpdated: indexData ? indexData.lastUpdated : null,
+      chunkMap: indexData ? indexData.chunkMap : null
     });
   } catch (error) {
     res.status(500).json({ error: 'Error checking data: ' + error.message });
+  }
+});
+
+// Get code index structure
+app.get('/api/code-index', async (req, res) => {
+  try {
+    const db = await connectToMongo();
+    if (!db) {
+      return res.status(500).json({ 
+        error: 'Failed to connect to MongoDB'
+      });
+    }
+    
+    const indexCollection = db.collection(indexMetaCollection);
+    const indexData = await indexCollection.findOne({ id: 'main' });
+    
+    if (!indexData) {
+      return res.status(404).json({ error: 'Index data not found' });
+    }
+    
+    res.json({ 
+      totalCodes: indexData.totalCodes,
+      chunkMap: indexData.chunkMap,
+      lastUpdated: indexData.lastUpdated
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Error retrieving code index: ' + error.message });
   }
 });
 
@@ -291,15 +406,57 @@ app.get('/api/search', async (req, res) => {
       return res.json({ results: [exactMatch] });
     }
     
-    // Then try text search
+    // Then try text search on multiple fields
     const results = await collection.find({
       $or: [
         { code: { $regex: query, $options: 'i' } },
-        { $text: { $search: query } }
+        { $text: { 
+          $search: query,
+          $caseSensitive: false,
+          $diacriticSensitive: false
+        }}
       ]
-    }).limit(100).toArray();
+    })
+    .project({
+      code: 1,
+      description: 1,
+      detail_context: 1,
+      score: { $meta: "textScore" }
+    })
+    .sort({ score: { $meta: "textScore" } })
+    .limit(50)
+    .toArray();
     
-    res.json({ results });
+    // Highlight matching terms in results
+    const processedResults = results.map(result => {
+      // Create a processed copy to avoid modifying the original
+      const processed = { ...result };
+      
+      // Only include highlightedContext if detail_context exists
+      if (result.detail_context) {
+        // Find the position of the query in the detail_context
+        const lowerQuery = query.toLowerCase();
+        const lowerContext = result.detail_context.toLowerCase();
+        const index = lowerContext.indexOf(lowerQuery);
+        
+        if (index !== -1) {
+          // Get a snippet around the matching text
+          const startPos = Math.max(0, index - 50);
+          const endPos = Math.min(result.detail_context.length, index + query.length + 100);
+          let snippet = result.detail_context.substring(startPos, endPos);
+          
+          // Add ellipsis if we're not at the beginning/end
+          if (startPos > 0) snippet = '...' + snippet;
+          if (endPos < result.detail_context.length) snippet = snippet + '...';
+          
+          processed.highlightedContext = snippet;
+        }
+      }
+      
+      return processed;
+    });
+    
+    res.json({ results: processedResults });
   } catch (error) {
     res.status(500).json({ error: 'Error searching: ' + error.message });
   }

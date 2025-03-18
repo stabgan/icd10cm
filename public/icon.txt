@@ -1,0 +1,10 @@
+This file is a placeholder for icon.png.
+
+Please create a 512x512 pixel PNG image and save it as "icon.png" in this directory.
+The icon will be used for the application and its installer.
+
+For best results:
+- Use a simple design with clear edges
+- Include padding around the main icon content
+- Use colors that work well on both light and dark backgrounds
+- Save as PNG with transparency 

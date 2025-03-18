@@ -18,16 +18,21 @@
     "dev:all": "concurrently -k \"npm run dev\" \"npm run server\"",
     "start": "npm run build && npm run server",
     "start:all": "node start.js",
-    "electron:dev": "concurrently -k \"npm run dev\" \"npm run electron:start\"",
+    "electron:dev": "cross-env NODE_ENV=development concurrently -k \"npm run dev\" \"npm run electron:start\"",
     "electron:start": "wait-on tcp:3000 && electron .",
-    "electron:build": "node scripts/build-electron.cjs",
-    "electron:pack": "electron-builder --dir",
-    "build:icons": "node scripts/build-icons.cjs"
+    "electron:package": "npm run build && electron-packager . icd10cm-browser --platform=win32 --arch=x64 --out=out --asar --overwrite",
+    "electron:zip": "powershell -Command \"Compress-Archive -Path './out/icd10cm-browser-win32-x64' -DestinationPath './out/ICD-10-CM-Browser-Windows.zip' -Force\"",
+    "electron:build:windows": "npm run build && npm run electron:package && npm run electron:zip",
+    "electron:create-installer": "electron-installer-windows --src out/icd10cm-browser-win32-x64/ --dest out/installer/ --config installer-config.json",
+    "electron:build": "node scripts/create-icon.js && npm run build && electron-builder --win",
+    "electron:winstaller": "node scripts/create-icon.js && npm run electron:package && node scripts/create-windows-installer.js",
+    "create:icon": "node scripts/create-icon.js",
+    "build:icons": "npx --yes electron-icon-maker --input=./public/icon.png --output=./build",
+    "create:shortcut": "node scripts/create-windows-shortcut.cjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "electron-serve": "^1.1.0",
-    "electron-store": "^8.1.0",
+    "electron-squirrel-startup": "^1.0.0",
     "express": "^4.18.2",
     "file-saver": "^2.0.5",
     "flexsearch": "^0.8.103",
@@ -48,14 +53,19 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
     "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
     "electron": "^30.1.0",
-    "electron-builder": "^24.9.1",
-    "electron-icon-builder": "^2.0.1",
+    "electron-builder": "^25.1.8",
+    "electron-icon-maker": "^0.0.5",
+    "electron-installer-windows": "^3.0.0",
+    "electron-packager": "^17.1.2",
+    "electron-winstaller": "^5.4.0",
     "eslint": "^8.45.0",
     "eslint-plugin-react": "^7.32.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.3",
     "fs-extra": "^11.3.0",
+    "jimp": "^1.6.0",
     "pkg-types": "^2.1.0",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
@@ -63,27 +73,7 @@
     "vite-plugin-node-polyfills": "^0.23.0",
     "wait-on": "^7.2.0"
   },
-  "build": {
-    "appId": "com.yourdomain.icd10cm",
-    "productName": "ICD-10-CM Browser",
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "server.js",
-      "uploads/**/*"
-    ],
-    "directories": {
-      "buildResources": "build",
-      "output": "release"
-    },
-    "win": {
-      "target": [
-        "portable"
-      ],
-      "icon": "build/icon.ico"
-    },
-    "asar": true,
-    "forceCodeSigning": false,
-    "electronVersion": "30.1.0"
+  "config": {
+    "forge": "./forge.config.js"
   }
 }

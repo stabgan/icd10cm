@@ -5,6 +5,7 @@ import CodeDetailPage from './pages/CodeDetailPage';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import LoadingScreen from './components/LoadingScreen';
+import CodeSidebar from './components/CodeSidebar';
 import { useTheme } from './contexts/ThemeContext';
 import { checkDataLoaded, getIndexData } from './utils/apiService';
 import SplashScreen from './components/SplashScreen';
@@ -13,7 +14,13 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [dataStatus, setDataStatus] = useState({ loaded: false, error: null });
   const [needsDataUpload, setNeedsDataUpload] = useState(false);
+  const [showCreator, setShowCreator] = useState(false);
   const { darkMode } = useTheme();
+
+  // Function to toggle creator credit visibility
+  const toggleCreatorCredit = (value) => {
+    setShowCreator(value);
+  };
 
   useEffect(() => {
     // Check if the data is available
@@ -68,8 +75,16 @@ function App() {
         darkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'
       } transition-colors duration-300`}>
         <Header />
-        {/* Add padding-top to account for fixed header */}
-        <main className="flex-grow container mx-auto px-4 py-8 pt-28">
+        
+        {/* Only show sidebar when data is loaded */}
+        {dataStatus.loaded && !dataStatus.error && (
+          <CodeSidebar />
+        )}
+        
+        {/* Add padding-top to account for fixed header and padding-left for sidebar */}
+        <main className={`flex-grow container mx-auto px-4 py-8 pt-28 ${
+          dataStatus.loaded && !dataStatus.error ? 'ml-16 md:ml-64' : ''
+        } transition-all duration-300`}>
           {!dataStatus.loaded && dataStatus.error ? (
             <div className={`${
               darkMode ? 'bg-red-900/20 border-red-800 text-red-300' : 'bg-red-50 border-red-500 text-red-700'
@@ -89,7 +104,7 @@ function App() {
             </div>
           ) : (
             <Routes>
-              <Route path="/" element={<HomePage dataStatus={dataStatus} />} />
+              <Route path="/" element={<HomePage dataStatus={dataStatus} onToggleCreator={toggleCreatorCredit} />} />
               <Route path="/code/:codeId" element={<CodeDetailPage />} />
               <Route path="*" element={
                 <div className="text-center py-12">
@@ -100,7 +115,7 @@ function App() {
             </Routes>
           )}
         </main>
-        <Footer />
+        <Footer showCreator={showCreator} />
       </div>
     </Router>
   );

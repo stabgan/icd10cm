@@ -4,381 +4,458 @@ This guide provides a detailed overview of the ICD-10-CM Browser application, de
 
 ## Project Overview
 
-The ICD-10-CM Browser is a React-based web application that allows users to search and browse International Classification of Diseases, 10th Revision, Clinical Modification (ICD-10-CM) codes. It operates entirely client-side, using browser storage (IndexedDB) to process and store large medical datasets without requiring a server.
+The ICD-10-CM Browser is a full-stack application that allows users to search and browse International Classification of Diseases, 10th Revision, Clinical Modification (ICD-10-CM) codes. It consists of a React frontend and a Node.js/Express backend with MongoDB for data storage.
 
 ### Repository Information
 - **Repository**: [https://github.com/stabgan/icd10cm](https://github.com/stabgan/icd10cm)
 - **Primary Branch**: main
-- **CI/CD**: GitHub Actions handles testing (see `.github/workflows/test.yml`)
+- **Author**: Kaustabh (GitHub: stabgan, Email: mail@stabgan.com)
 
 ### Key Capabilities
-- Process large JSONL files (up to 1.2GB) directly in the browser
-- Store and index medical code data for efficient searching
+- Process and store large JSONL files of ICD-10-CM codes in MongoDB
 - Provide a responsive UI that works across all device sizes
 - Support dark/light mode theming based on user preference
-- Display detailed code information with Markdown formatting
-- Operate entirely offline with no server requirements
+- Display detailed code information with proper formatting
+- Available as both web application and Electron desktop app
+- Feature alphabetical browsing of codes via sidebar
+- Allow database reset and reload functionality
+- Operate with MongoDB backend for robust data management
 
 ## Architecture Overview
 
-The application follows a modern React architecture with these key components:
+The application follows a modern full-stack architecture with these key components:
 
 ### Main Application Structure
 ```
-src/
-├── components/         # UI components
-├── context/           # React context providers
-├── utils/             # Utility functions and data processing
-├── test/              # Test files (unit, integration, e2e)
-├── assets/            # Static assets (images, icons)
-├── App.jsx            # Main application component
-└── main.jsx           # Application entry point
+/
+├── server.js            - Express server with MongoDB integration
+├── start.js             - Helper script to start everything together
+├── electron/            - Electron app configuration files
+│   ├── main.cjs         - Main Electron process
+│   └── preload.js       - Preload script for secure IPC
+├── src/                 - React frontend application
+│   ├── components/      - UI components
+│   │   └── CodeSidebar.jsx - Alphabetical code browser sidebar
+│   ├── contexts/        - React context providers
+│   ├── pages/           - Page components
+│   └── utils/           - Utility functions including API service
+├── scripts/             - Build and utility scripts
+│   └── build-windows.cjs - Windows-specific build script
+└── build/               - Build assets and icons
 ```
 
 ### Core Components
-1. `SplashScreen` - Handles data upload and processing
-2. `Search` - Provides search interface with suggestions
-3. `CodeGrid` - Displays search results in a grid layout
-4. `CodeDetail` - Displays detailed information for a specific code
-5. `ThemeToggle` - Manages dark/light mode preferences
-6. `Header` and `Footer` - Application-wide navigation and information
+
+#### Backend
+1. **Express Server** - Handles API requests and data management
+2. **MongoDB Integration** - Stores and indexes ICD-10-CM codes
+3. **File Processing** - Parses and indexes JSONL data files
+4. **Search API** - Provides efficient multi-tiered search capabilities
+
+#### Frontend
+1. `App.jsx` - Main application component with routing
+2. `HomePage` - Primary interface with search functionality
+3. `CodeDetailPage` - Displays detailed code information
+4. `CodeSidebar` - Alphabetical navigation of codes
+5. `SplashScreen` - Handles file upload and initial data setup
+6. `Search` - Provides search interface with real-time results
+7. `ThemeContext` - Manages dark/light mode preferences
+
+#### Desktop App
+1. `electron/main.cjs` - Main Electron process managing app lifecycle
+2. `electron/preload.js` - Secure bridge between renderer and main processes
+3. `forge.config.js` - Electron Forge configuration for packaging
 
 ## Data Flow
 
 The application's data flow follows this pattern:
 
 1. **Initial Load**:
-   - Check if data exists in IndexedDB
-   - If not, show SplashScreen for data upload
+   - Express server connects to MongoDB
+   - Frontend checks if data is available in MongoDB
+   - If no data, show SplashScreen for data upload
    - If data exists, show main interface
 
 2. **Data Import Process**:
    - User uploads JSONL file via SplashScreen
-   - File is processed in chunks to avoid memory issues
-   - Each chunk is parsed and stored in IndexedDB
+   - File is transferred to server via multipart form
+   - Server processes file in chunks to avoid memory issues
+   - Each chunk is parsed and stored in MongoDB collections
    - Indexes are created for efficient searching
    - UI is refreshed to show search interface
 
 3. **Search Flow**:
    - User enters query in Search component
-   - Search component sends query to dataProcessor
-   - dataProcessor searches IndexedDB with multi-tier strategy:
+   - Request is sent to the backend API
+   - Server searches MongoDB with multi-tier strategy:
      - First attempts exact code match
-     - Then searches through indexed terms
-     - Falls back to direct search if needed
-   - Results are returned to Search component
-   - Results are displayed in CodeGrid
+     - Then searches through text indexes
+     - Uses regex for partial matches
+   - Results are returned to frontend
+   - Results are displayed in search results grid
 
 4. **Detail View Flow**:
    - User selects code from search results
-   - App navigates to CodeDetail route
-   - CodeDetail component retrieves code data from IndexedDB
-   - Markdown content is rendered with proper formatting
+   - App navigates to CodeDetailPage route
+   - Code data is fetched from server by ID
+   - Detailed information is displayed with proper formatting
 
-## Storage Strategy
+5. **Reset Database Flow**:
+   - User clicks "Reset Database" button
+   - Confirmation dialog is displayed
+   - Request is sent to reset-database endpoint
+   - Server clears MongoDB collections
+   - Server reloads data from last uploaded file
+   - UI is refreshed to show updated data
 
-The application uses IndexedDB with multiple stores:
+6. **Alphabetical Browsing Flow**:
+   - Sidebar shows letters with available codes
+   - User selects a letter to see all codes starting with that letter
+   - Codes are fetched from server by letter prefix
+   - User can select code to view details
 
-1. **`CHUNKS_STORE`** - Stores the actual code data:
+## Database Structure
+
+The application uses MongoDB with multiple collections:
+
+1. **`codes`** - Stores the actual code data:
    - Key: Code ID (e.g., "A00.0")
    - Value: Complete code object with description and detailed context
 
-2. **`SEARCH_INDEX_STORE`** - Stores search indexes:
-   - Key: Searchable term
-   - Value: Array of code IDs containing that term
-
-3. **`META_STORE`** - Stores metadata about the imported dataset:
-   - Key: Metadata property name
-   - Value: Property value (e.g., total count, import date)
+2. **`indexMeta`** - Stores metadata about the imported dataset:
+   - Total code count
+   - Letter-based code mapping
+   - Last update timestamp
+   - Processing statistics
 
 ## Implementation Details
 
-### Data Processing Pipeline
+### Backend Data Processing
 
-The `dataProcessor.js` utility handles the core data management:
+The server handles data processing through these key operations:
 
-1. **File Processing**:
+1. **File Upload and Processing**:
    ```javascript
-   // Process file in chunks to avoid memory issues
-   async function processFile(file, progressCallback) {
-     const chunkSize = 10 * 1024 * 1024; // 10MB chunks
-     const db = await openDB();
-     let offset = 0;
-     
-     while (offset < file.size) {
-       // Read chunk, parse JSONL, store in IndexedDB
-       const chunk = file.slice(offset, offset + chunkSize);
-       await processChunk(chunk, db);
-       offset += chunkSize;
-       progressCallback(Math.min(100, Math.floor((offset / file.size) * 100)));
+   // Process file and store in MongoDB
+   app.post('/api/process-file', upload.single('file'), async (req, res) => {
+     if (!req.file) {
+       return res.status(400).json({ error: 'No file uploaded' });
      }
-     
-     // Build search indexes after all chunks are processed
-     await buildSearchIndex(db);
-   }
-   ```
 
-2. **Search Implementation**:
-   ```javascript
-   // Multi-tier search strategy
-   async function searchCodes(query) {
-     if (!query) return [];
-     const db = await openDB();
-     
-     // First try exact code match
-     const exactMatch = await db.get(CHUNKS_STORE, query.toUpperCase());
-     if (exactMatch) return [exactMatch];
-     
-     // Then try search index
-     try {
-       const tx = db.transaction([SEARCH_INDEX_STORE, CHUNKS_STORE], 'readonly');
-       const indexStore = tx.objectStore(SEARCH_INDEX_STORE);
-       const chunksStore = tx.objectStore(CHUNKS_STORE);
-       
-       // Check if search index exists
-       const indexCount = await indexStore.count();
-       if (indexCount === 0) {
-         // Fall back to direct search if no index
-         return directCodeSearch(query, chunksStore);
+     const filePath = req.file.path;
+     processingStatus = {
+       inProgress: true,
+       progress: 0,
+       message: 'Starting processing...',
+       error: null,
+       fileData: {
+         path: filePath,
+         originalName: req.file.originalname,
+         size: req.file.size
        }
-       
-       // Search through index
-       const searchTerms = query.toLowerCase().split(/\s+/);
-       const results = new Map();
-       
-       for (const term of searchTerms) {
-         const codeIds = await indexStore.get(term);
-         if (codeIds) {
-           for (const id of codeIds) {
-             results.set(id, (results.get(id) || 0) + 1);
-           }
-         }
-       }
-       
-       // Sort by relevance and fetch full code objects
-       const sortedIds = [...results.entries()]
-         .sort((a, b) => b[1] - a[1])
-         .map(entry => entry[0])
-         .slice(0, 100);
-       
-       const codes = await Promise.all(
-         sortedIds.map(id => chunksStore.get(id))
-       );
-       
-       return codes.filter(Boolean);
-     } catch (error) {
-       console.error('Search error:', error);
-       return [];
-     }
-   }
-   
-   // Direct search fallback for when index is not available
-   async function directCodeSearch(query, store) {
-     console.log('Attempting direct search for:', query);
-     const allCodes = [];
-     const lowerQuery = query.toLowerCase();
+     };
      
-     // Search all codes in the database
-     await store.openCursor().then(function processNextCode(cursor) {
-       if (!cursor || allCodes.length >= 100) return allCodes;
-       
-       const code = cursor.value;
-       if (code.code.toLowerCase().includes(lowerQuery) || 
-           code.description.toLowerCase().includes(lowerQuery)) {
-         allCodes.push(code);
-       }
-       
-       return cursor.continue().then(processNextCode);
+     // Return immediately with acknowledgment
+     res.status(200).json({ 
+       message: 'File upload received, processing started',
+       status: 'processing'
      });
      
-     return allCodes;
-   }
+     // Start processing in the background
+     processFileInBackground(filePath);
+   });
    ```
 
-### UI Components
+2. **Database Reset**:
+   ```javascript
+   // Add endpoint to reset database and reload data from a file
+   app.post('/api/reset-database', async (req, res) => {
+     try {
+       const db = await connectToMongo();
+       
+       if (!db) {
+         return res.status(500).json({ 
+           error: 'Failed to connect to MongoDB',
+           success: false
+         });
+       }
+       
+       // Find last processed file info
+       const indexCollection = db.collection(indexMetaCollection);
+       const indexData = await indexCollection.findOne({ id: 'main' });
+       
+       if (!indexData) {
+         return res.status(404).json({ 
+           error: 'No data has been loaded before, cannot reset',
+           success: false
+         });
+       }
+       
+       // Store processing status
+       processingStatus = {
+         inProgress: true,
+         progress: 0,
+         message: 'Resetting database...',
+         error: null
+       };
+       
+       // Return immediately with acknowledgment
+       res.status(200).json({ 
+         message: 'Database reset started',
+         status: 'processing'
+       });
+       
+       // Reset database in background
+       const collection = db.collection(codesCollection);
+       await collection.deleteMany({});
+       await indexCollection.deleteMany({});
+       
+       // Check if the last uploaded file data exists
+       if (processingStatus.fileData && processingStatus.fileData.path) {
+         processFileInBackground(processingStatus.fileData.path);
+       } else {
+         processingStatus = {
+           inProgress: false,
+           progress: 0,
+           message: 'Reset completed but no previous file data found to reload',
+           error: null
+         };
+       }
+     } catch (error) {
+       console.error('Error resetting database:', error);
+       processingStatus = {
+         inProgress: false,
+         progress: 0,
+         message: 'Error resetting database',
+         error: error.message
+       };
+     }
+   });
+   ```
 
-**SplashScreen Component**:
-- Handles file upload with drag-and-drop or file picker
-- Displays progress during file processing
-- Redirects to main interface after processing completes
-- Recently updated to use `window.location.reload()` for more reliable redirect
+3. **Search Implementation**:
+   ```javascript
+   // Search codes
+   app.get('/api/search', async (req, res) => {
+     const query = req.query.q;
+     if (!query) {
+       return res.json({ results: [] });
+     }
+     
+     try {
+       const db = await connectToMongo();
+       if (!db) {
+         return res.status(500).json({ 
+           error: 'Failed to connect to MongoDB',
+           results: [] 
+         });
+       }
+       
+       const collection = db.collection(codesCollection);
+       
+       // First try exact code match
+       const exactMatch = await collection.findOne({ code: query.toUpperCase() });
+       if (exactMatch) {
+         return res.json({ results: [exactMatch] });
+       }
+       
+       // Then try text search on multiple fields
+       const results = await collection.find({
+         $or: [
+           { code: { $regex: query, $options: 'i' } },
+           { $text: { 
+             $search: query,
+             $caseSensitive: false,
+             $diacriticSensitive: false
+           }}
+         ]
+       })
+       .project({
+         code: 1,
+         description: 1,
+         detail_context: 1,
+         score: { $meta: "textScore" }
+       })
+       .sort({ score: { $meta: "textScore" } })
+       .limit(50)
+       .toArray();
+       
+       // Process results to highlight matching terms
+       const processedResults = results.map(result => {
+         // Processing logic for highlighting
+         return processed;
+       });
+       
+       res.json({ results: processedResults });
+     } catch (error) {
+       res.status(500).json({ error: 'Error searching: ' + error.message });
+     }
+   });
+   ```
+
+### Frontend Components
+
+**HomePage Component**:
+- Provides main search interface
+- Displays search results
+- Contains reset database functionality
+- Shows usage instructions
+
+**CodeSidebar Component**:
+- Shows alphabetical listing of codes
+- Allows collapsing/expanding for space efficiency
+- Fetches codes by letter prefix
+- Highlights currently selected code
 
 **Search Component**:
-- Provides input field with real-time suggestions
-- Implements debounced search to prevent excessive database queries
-- Maintains focus on input field for better user experience
-- Uses click-outside detection to close suggestions when appropriate
-- Recently updated with improved focus handling and keyboard navigation
+- Provides search input with real-time results
+- Uses debounced API requests to prevent flooding
+- Displays clear results with highlighting
 
-**CodeDetail Component**:
-- Fetches and displays detailed code information
-- Renders Markdown content with proper formatting
-- Provides navigation back to search results
-
-**ThemeToggle Component**:
+**ThemeContext**:
 - Detects system color scheme preference
 - Allows manual override of theme
 - Persists preference in localStorage
 
-## Recent Optimizations
+## Desktop Application
 
-### 1. Local-Only Usage Optimizations
-- Removed GitHub Pages deployment configuration
-- Simplified base path in Vite config to use root path ('/')
-- Enhanced error handling for browser APIs
-- Improved robustness of IndexedDB operations
+The project includes an Electron desktop application with these features:
 
-### 2. Search Functionality Improvements
-- Added multi-tier search strategy with fallbacks
-- Implemented direct search capability when index is not available
-- Enhanced search relevance by considering partial matches
-- Limited results to 100 entries for better performance
-- Added case-insensitive searching for better user experience
+1. **Integrated Server**:
+   - Runs the Express server within the Electron process
+   - Manages MongoDB connection automatically
+   - Handles graceful shutdown of services
 
-### 3. UI and UX Enhancements
-- Fixed focus management in Search component
-- Added autoFocus attribute to search input
-- Converted search icon to a button for better accessibility
-- Implemented robust click-outside detection
-- Improved feedback during long-running operations
+2. **File Selection**:
+   - Uses native file dialogs for selecting data files
+   - Securely transfers file data to the server process
 
-### 4. Performance Optimizations
-- Implemented debounced search to reduce database load
-- Added cleanup functions to prevent memory leaks
-- Enhanced chunk processing to better handle large files
-- Improved error handling and recovery mechanisms
+3. **Windows Integration**:
+   - Creates desktop shortcuts
+   - Provides start menu entries
+   - Includes proper installer with MongoDB dependency check
 
-### 5. Testing Framework Enhancements
-- Added Playwright for end-to-end testing
-- Improved test coverage for UI components
-- Enhanced mocking for IndexedDB in tests
-- Added integration tests for search and view functionality
+4. **Build Configuration**:
+   - Uses Electron Forge for packaging
+   - Provides multiple installer options (Squirrel, Inno Setup)
+   - Cross-platform compatibility
 
-## Key Files and Their Functions
+## Build and Deployment
 
-### 1. `src/utils/dataProcessor.js`
-The central utility for data management with these key functions:
-- `openDB()` - Opens connection to IndexedDB
-- `processFile()` - Processes JSONL file in chunks
-- `buildSearchIndex()` - Creates search indexes for efficient queries
-- `searchCodes()` - Multi-tier search implementation
-- `getCode()` - Retrieves specific code details
-- `directCodeSearch()` - Fallback search method
-
-### 2. `src/components/Search.jsx`
-The search interface component with these features:
-- Debounced input handling
-- Suggestions display
-- Keyboard navigation
-- Focus management
-- Click-outside detection
-
-### 3. `src/components/SplashScreen.jsx`
-Handles data import with these capabilities:
-- File upload interface
-- Progress tracking
-- Error handling
-- Database reset option
-- Redirect after completion
-
-### 4. `src/context/ThemeContext.jsx`
-Manages application theming with:
-- System preference detection
-- Manual theme override
-- Theme persistence
-- Context provider for theme consumers
-
-### 5. `src/App.jsx`
-Main application component that:
-- Sets up routing
-- Handles theme context
-- Manages main application flow
-- Provides error boundaries
-
-## Testing Framework
-
-The project includes comprehensive testing at multiple levels:
-
-### 1. Unit Tests
-Located in `src/test` with files like:
-- `Header.test.jsx`
-- `Footer.test.jsx`
-- `ThemeToggle.test.jsx`
-- `dataProcessor.test.js`
-
-### 2. Integration Tests
-Tests component interactions:
-- `SearchAndView.test.jsx` - Tests search-to-detail flow
-
-### 3. End-to-End Tests
-Located in `src/test/e2e` using Playwright:
-- `basic.spec.js` - Tests core application flows
-
-## Data Format
-
-The application expects data in JSONL format, with each line containing a JSON object:
-```json
-{"code":"A00.0","description":"Cholera due to Vibrio cholerae","detailed_context":"# Detailed information in Markdown format"}
+### Web Application
+```bash
+# Build for production web deployment
+npm run build
+npm run server
 ```
 
-Each entry must include:
-- `code` - The ICD-10-CM code identifier (e.g., "E11.9")
-- `description` - Brief description of the code
-- `detailed_context` - Detailed information formatted in Markdown
+### Desktop Application
+```bash
+# Development mode
+npm run electron:dev
+
+# Package application
+npm run electron:package
+
+# Create installers
+npm run electron:make
+
+# Windows-specific builds
+npm run electron:make:windows
+```
 
 ## Performance Considerations
 
 To handle large datasets efficiently, the application:
-- Processes files in 10MB chunks
-- Uses a worker thread for intensive operations
-- Implements debounced search
-- Limits search results to manageable numbers
-- Uses IndexedDB cursors for optimal traversal
-- Implements cleanup functions to prevent memory leaks
+- Processes files in chunks on the server
+- Uses MongoDB indexing for fast searches
+- Implements pagination for large result sets
+- Uses debouncing for search inputs
+- Optimizes the rendering of large code lists with virtualization
 
 ## Technology Stack
 
+### Backend
+- **Node.js**: JavaScript runtime
+- **Express**: Web server framework
+- **MongoDB**: NoSQL database
+- **Multer**: File upload handling
+
+### Frontend
 - **React**: UI framework
 - **React Router**: For navigation
 - **Tailwind CSS**: For styling
-- **IndexedDB**: For client-side storage
-- **idb Library**: For IndexedDB interactions
-- **Markdown-it**: For Markdown rendering
-- **Vite**: For development and building
-- **Vitest**: For testing
-- **Playwright**: For end-to-end testing
+- **Context API**: For state management
 
-## Browser Compatibility
+### Desktop App
+- **Electron**: Desktop application framework
+- **Electron Forge**: Build and packaging tool
+- **Inno Setup**: Advanced Windows installer (optional)
 
-The application is designed to work in modern browsers:
-- **Google Chrome**: Primary test platform, best IndexedDB performance
-- **Microsoft Edge**: Fully supported
-- **Firefox**: Fully supported
-- **Safari**: Supported with some IndexedDB limitations
+## Browser and Platform Compatibility
+
+The application is designed to work on:
+- **Web Browsers**: Chrome, Firefox, Edge, Safari
+- **Desktop Platforms**: Windows, macOS, Linux
+- **Minimum Requirements**: 
+  - 2GB RAM for processing large datasets
+  - MongoDB 4.0+ for backend storage
+  - Node.js 14+ for server runtime
 
 ## Troubleshooting Common Issues
 
-### 1. Data Import Failures
-- **Possible Causes**: Malformed JSONL, memory constraints, browser limits
-- **Solutions**: Verify file format, try smaller chunks, use Chrome/Edge
+### 1. MongoDB Connection Issues
+- **Possible Causes**: MongoDB not running, connection refused, wrong port
+- **Solutions**: Ensure MongoDB service is running, check port configuration, check authentication settings
 
-### 2. Search Not Returning Expected Results
-- **Possible Causes**: Missing index, corrupted data, invalid query
-- **Solutions**: Reset database and reimport, verify search terms, check browser console
+### 2. File Upload Failures
+- **Possible Causes**: File too large, wrong format, temporary directory permissions
+- **Solutions**: Check file format, ensure uploads directory is writable, increase server timeout settings
 
-### 3. Display Issues
-- **Possible Causes**: CSS conflicts, browser compatibility issues
-- **Solutions**: Toggle theme, refresh page, clear browser cache
+### 3. Search Not Working
+- **Possible Causes**: No data loaded, indexes not created, search term issues
+- **Solutions**: Upload data first, reset database to rebuild indexes, check search term format
 
-## Contributing Guidelines
+### 4. Desktop App Issues
+- **Possible Causes**: MongoDB not installed, path issues, permission problems
+- **Solutions**: Install MongoDB before running, run as administrator, check app logs
 
-To contribute to the project:
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
+## Future Enhancements
 
-## Licensing
+Planned or potential enhancements include:
+- Advanced filtering by code categories
+- Data export capabilities (CSV, PDF)
+- Integration with medical terminology APIs
+- Analytics dashboard for usage patterns
+- Multi-language support
+- Offline mode with service workers
 
-This project is licensed under the MIT License, allowing for free use, modification, and distribution with proper attribution. 
+## Recent Updates and Enhancements
+
+1. **Sidebar Navigation**:
+   - Added alphabetical code browsing capability
+   - Implemented collapsible sidebar for better space management
+   - Added letter-based filtering of codes
+
+2. **Database Management**:
+   - Added reset database functionality
+   - Improved data reloading from original files
+   - Enhanced progress tracking and error handling
+
+3. **Desktop Application**:
+   - Added Electron desktop application support
+   - Created Windows-specific build configuration
+   - Added installers with MongoDB dependency checks
+
+4. **UI Enhancements**:
+   - Improved dark mode support
+   - Added creator credit toggle functionality
+   - Enhanced responsive design for all screen sizes
+
+## Licensing and Attribution
+
+This project is licensed under the MIT License, created by Kaustabh (GitHub: stabgan) and contributors.
+
+---
+
+This guide is intended to provide a comprehensive understanding of the ICD-10-CM Browser application for LLMs and AI agents working on enhancements or fixes. For any questions not covered in this guide, please refer to the code documentation or contact the author directly. 

@@ -1,0 +1,13 @@
+{
+  "name": "icd10cm-browser",
+  "productName": "ICD-10-CM Browser",
+  "description": "Browser for ICD-10-CM medical codes",
+  "version": "0.1.0",
+  "authors": "Kaustabh (stabgan)",
+  "exe": "icd10cm-browser.exe",
+  "iconUrl": "https://raw.githubusercontent.com/stabgan/icd10cm/main/build/icons/icon.ico",
+  "setupIcon": "./build/icons/icon.ico",
+  "noMsi": true,
+  "setupExe": "ICD-10-CM-Browser-Setup.exe",
+  "loadingGif": "./build/splash.gif"
+} 

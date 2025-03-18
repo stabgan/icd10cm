@@ -1,6 +1,6 @@
 # ICD-10-CM Browser with MongoDB Backend
 
-A web application for browsing and searching ICD-10-CM diagnosis codes with a Node.js/MongoDB backend.
+A web application for browsing and searching ICD-10-CM diagnosis codes with a Node.js/MongoDB backend and optional Electron desktop app.
 
 ## Project Structure
 
@@ -9,6 +9,7 @@ This application uses a client-server architecture:
 - **Frontend**: React.js single-page application
 - **Backend**: Express.js server handling file uploads and data processing
 - **Database**: MongoDB for storing ICD-10 codes and search indexes
+- **Desktop App**: Optional Electron wrapper for standalone use
 
 ## Setup Instructions
 
@@ -65,6 +66,22 @@ This will:
 
 4. Open http://localhost:3000 in your browser
 
+#### Option 3: Run as Desktop Application
+
+To run as a desktop application using Electron:
+
+```
+npm run electron:start
+```
+
+To build the desktop application:
+
+```
+npm run electron:build
+```
+
+This will create executable files in the `release` directory for your operating system.
+
 ### Importing Data
 
 1. Start the application
@@ -72,6 +89,26 @@ This will:
 3. Upload your ICD-10-CM data file (JSONL format)
 4. Wait for processing to complete (this may take several minutes for large files)
 5. After completion, you'll be redirected to the main application
+
+### Resetting Data
+
+If you need to reload data from the original JSONL file:
+
+1. Click the "Reset Database" button at the top right of the application
+2. Confirm the reset when prompted
+3. Wait for the process to complete (the page will refresh automatically)
+
+## Features
+
+### Code Browser
+
+- **Search**: Find codes by text or code number
+- **Code Sidebar**: Browse codes alphabetically using the left sidebar
+  - Click on a letter to load codes starting with that letter
+  - Collapse/expand the sidebar as needed
+- **Code Details**: View detailed information about each code
+- **Dark Mode**: Toggle between light and dark themes
+- **Responsive Design**: Works on desktop and mobile devices
 
 ## Data Format
 
@@ -106,10 +143,12 @@ The server will serve both the API and the static frontend files.
 ├── mongo_data/          - MongoDB data directory (created on first run)
 ├── src/                 - React frontend application
 │   ├── components/      - UI components
+│   │   └── CodeSidebar.jsx - Alphabetical code browser sidebar
 │   ├── contexts/        - React context providers
 │   ├── pages/           - Page components
 │   └── utils/           - Utility functions including API service
-└── public/              - Static assets
+├── public/              - Static assets
+└── electron/            - Electron configuration for desktop app
 ```
 
 ## Troubleshooting
@@ -124,6 +163,11 @@ The server will serve both the API and the static frontend files.
 
 - **Port Conflicts**: The server runs on port 5000 by default. If another application is using this port, change the `port` variable in server.js.
 - **ES Module Errors**: This application uses ES modules. Ensure you're using Node.js version 14+ and that all import/export statements are correct.
+
+### Desktop App Issues
+
+- **File Selection**: If file selection doesn't work in the desktop app, try using the web version to upload your data first.
+- **MongoDB Connection**: The desktop app requires MongoDB to be installed and running on your system.
 
 ## License
 

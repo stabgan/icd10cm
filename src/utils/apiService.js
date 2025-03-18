@@ -17,15 +17,23 @@ export async function checkDataLoaded() {
 // Get index metadata
 export async function getIndexData() {
   try {
-    const response = await fetch(`${API_URL}/check-data`);
+    const response = await fetch(`${API_URL}/code-index`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch index data: ${response.status}`);
+    }
     const data = await response.json();
     return {
       totalCodes: data.totalCodes || 0,
-      lastUpdated: data.lastUpdated || null
+      lastUpdated: data.lastUpdated || null,
+      chunkMap: data.chunkMap || {}
     };
   } catch (error) {
     console.error('Error getting index data:', error);
-    return null;
+    return {
+      totalCodes: 0,
+      lastUpdated: null,
+      chunkMap: {}
+    };
   }
 }
 
@@ -82,5 +90,25 @@ export async function getCodesForLetter(letter) {
   } catch (error) {
     console.error(`Error getting codes for letter ${letter}:`, error);
     return [];
+  }
+}
+
+// Reset database and reload from original file
+export async function resetDatabase() {
+  try {
+    const response = await fetch(`${API_URL}/reset-database`, {
+      method: 'POST',
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Error resetting database');
+    }
+    
+    const data = await response.json();
+    return { success: true, message: data.message };
+  } catch (error) {
+    console.error('Error resetting database:', error);
+    return { success: false, error: error.message };
   }
 } 
