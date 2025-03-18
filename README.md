@@ -1,6 +1,6 @@
 # ICD-10-CM Browser
 
-[![Tests](https://github.com/yourusername/icd10cm-browser/actions/workflows/test.yml/badge.svg)](https://github.com/yourusername/icd10cm-browser/actions/workflows/test.yml)
+[![Tests](https://github.com/stabgan/icd10cm-browser/actions/workflows/test.yml/badge.svg)](https://github.com/stabgan/icd10cm-browser/actions/workflows/test.yml)
 
 A modern, client-side web application for browsing and searching ICD-10-CM diagnosis codes. Built with React, Tailwind CSS, and IndexedDB for local data storage and processing.
 
@@ -26,7 +26,7 @@ A modern, client-side web application for browsing and searching ICD-10-CM diagn
 
 1. **Clone and Install**
    ```bash
-   git clone https://github.com/yourusername/icd10cm-browser.git
+   git clone https://github.com/stabgan/icd10cm-browser.git
    cd icd10cm-browser
    npm install
    ```
