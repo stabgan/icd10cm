@@ -76,6 +76,13 @@ jobs:
           if [ -f "public/CNAME" ]; then
             cp public/CNAME ./dist/
           fi
+          # Copy data directory to dist
+          if [ -d "public/data" ]; then
+            echo "Copying data directory..."
+            cp -r public/data ./dist/
+          else
+            echo "Warning: public/data directory not found"
+          fi
           # Check if build was successful
           if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
             echo "❌ Build failed - dist directory or index.html not found"

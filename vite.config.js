@@ -89,5 +89,22 @@ export default defineConfig({
         global: 'globalThis'
       }
     }
+  },
+  // Ensure data files are copied to the dist directory
+  publicDir: 'public',
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+      },
+      output: {
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name.endsWith('.json')) {
+            return 'data/[name][extname]';
+          }
+          return 'assets/[ext]/[name]-[hash].[ext]';
+        }
+      }
+    }
   }
 }) 
