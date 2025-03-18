@@ -77,16 +77,33 @@ function App() {
         }
         
         console.log('Fetching data from:', dataUrl);
-        const response = await fetch(dataUrl);
-        if (!response.ok)
-          throw new Error("Data not available");
-        const data = await response.json();
-        setDataStatus({ 
-          loaded: true, 
-          totalCodes: data.totalCodes, 
-          chunkCount: data.chunkCount,
-          lastUpdated: data.lastUpdated
-        });
+        
+        try {
+          const response = await fetch(dataUrl);
+          if (!response.ok) {
+            throw new Error("Data not available");
+          }
+          
+          const data = await response.json();
+          setDataStatus({ 
+            loaded: true, 
+            totalCodes: data.totalCodes || 0, 
+            chunkCount: data.chunkCount || 0,
+            lastUpdated: data.lastUpdated || new Date().toISOString(),
+            dataAvailable: data.totalCodes > 0
+          });
+        } catch (fetchError) {
+          console.error('Error fetching data:', fetchError);
+          // Set loaded status but with dataAvailable=false
+          setDataStatus({
+            loaded: true,
+            totalCodes: 0,
+            chunkCount: 0,
+            lastUpdated: new Date().toISOString(),
+            dataAvailable: false,
+            error: 'Data files are being prepared. Please check back later.'
+          });
+        }
       } catch (error) {
         console.error('Failed to load data:', error);
         setDataStatus({ 
