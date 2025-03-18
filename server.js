@@ -14,13 +14,25 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 5000;
-const upload = multer({ dest: 'uploads/' });
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log(`Created uploads directory: ${uploadsDir}`);
+}
+
+const upload = multer({ dest: uploadsDir });
+
+// Static file serving
+const distPath = path.join(__dirname, 'dist');
+console.log(`Using dist path: ${distPath}`);
 
 // MongoDB connection
-const uri = 'mongodb://localhost:27017';
+const uri = process.env.MONGO_URI || 'mongodb://localhost:27017';
 const client = new MongoClient(uri, {
-  connectTimeoutMS: 5000,
-  serverSelectionTimeoutMS: 5000
+  connectTimeoutMS: 10000,
+  serverSelectionTimeoutMS: 10000
 });
 const dbName = 'icd10cm';
 const codesCollection = 'codes';
@@ -29,7 +41,7 @@ const indexMetaCollection = 'indexMeta';
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'dist')));
+app.use(express.static(distPath));
 
 // Store processing state globally
 let processingStatus = {
@@ -42,7 +54,7 @@ let processingStatus = {
 
 // Connect to MongoDB with retry
 async function connectToMongo() {
-  let retries = 3;
+  let retries = 5;
   while (retries > 0) {
     try {
       await client.connect();
@@ -50,15 +62,19 @@ async function connectToMongo() {
       return client.db(dbName);
     } catch (error) {
       retries--;
+      const remainingAttempts = retries > 0 ? `(${retries} attempts left)` : '(final attempt)';
+      console.error(`MongoDB connection error ${remainingAttempts}:`, error.message);
+      
       if (retries === 0) {
-        console.error('MongoDB connection error after multiple attempts:', error);
+        console.error('Failed to connect to MongoDB after multiple attempts');
         console.error('Make sure the MongoDB service is running on port 27017');
         console.error('You can check this by running "services.msc" and looking for MongoDB service');
         return null;
       }
-      console.log(`Connection failed, retrying... (${retries} attempts left)`);
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      console.log(`Connection failed, retrying... ${remainingAttempts}`);
+      // Wait longer between retries
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
 }
@@ -517,10 +533,19 @@ app.get('/api/codes/:letter', async (req, res) => {
 
 // Catch-all route to serve the frontend
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  // Try to find the index.html file
+  const indexFile = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexFile)) {
+    res.sendFile(indexFile);
+  } else {
+    console.error(`Cannot find index.html at ${indexFile}`);
+    res.status(500).send(`Server Error: Cannot find index.html. Looked at: ${indexFile}`);
+  }
 });
 
 // Start server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
+  console.log(`Server directory: ${__dirname}`);
+  console.log(`Static files served from: ${distPath}`);
 }); 

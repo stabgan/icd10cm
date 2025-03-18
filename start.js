@@ -9,16 +9,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Configuration
-const MONGO_DATA_DIR = path.join('C:', 'Program Files', 'MongoDB', 'Server', '8.0', 'data');
-const MONGO_PORT = 27017;
 const SERVER_PORT = 5000;
 const FRONTEND_PORT = 3000;
-
-// We don't need to create mongo_data directory anymore since MongoDB service uses its own path
-// if (!fs.existsSync(MONGO_DATA_DIR)) {
-//   fs.mkdirSync(MONGO_DATA_DIR, { recursive: true });
-//   console.log(`Created MongoDB data directory: ${MONGO_DATA_DIR}`);
-// }
 
 // Function to check if MongoDB is already running
 function checkMongoDBRunning(callback) {
@@ -31,106 +23,90 @@ function checkMongoDBRunning(callback) {
   });
 }
 
-// Start MongoDB
-function startMongoDB() {
+// Create a promise-based version of the check
+function isMongoDBRunning() {
   return new Promise((resolve) => {
-    checkMongoDBRunning((isRunning) => {
-      if (isRunning) {
-        console.log('MongoDB service is already running');
-        resolve();
-        return;
-      }
-
-      console.log('MongoDB service is not running...');
-      
-      if (os.platform() === 'win32') {
-        console.log('Attempting to start MongoDB Windows service...');
-        // Try to start MongoDB Windows service
-        exec('net start MongoDB', (error, stdout, stderr) => {
-          if (error) {
-            console.error('\x1b[31m%s\x1b[0m', 'Could not start MongoDB service:');
-            console.error('\x1b[33m%s\x1b[0m', stderr || error.message);
-            console.log('The application will continue, but database operations may fail.');
-            console.log('Check that MongoDB is installed as a Windows service.');
-          } else {
-            console.log('MongoDB service started successfully');
-          }
-          resolve();
-        });
-      } else {
-        // For non-Windows platforms
-        console.log('You need to start MongoDB manually on this platform.');
-        console.log('The application will continue, but database operations may fail.');
-        resolve();
-      }
+    checkMongoDBRunning(isRunning => {
+      resolve(isRunning);
     });
   });
 }
 
-// Start the backend server
-function startBackend() {
-  console.log('Starting backend server...');
-  const server = spawn('node', ['server.js'], {
+// Function to start Express server
+function startExpressServer() {
+  console.log('Starting Express server...');
+  const serverProcess = spawn('node', ['server.js'], {
     stdio: 'inherit'
   });
-
-  server.on('error', (error) => {
-    console.error(`Failed to start backend: ${error.message}`);
+  
+  serverProcess.on('error', (error) => {
+    console.error('Failed to start Express server:', error);
+    process.exit(1);
   });
-
-  return server;
+  
+  return serverProcess;
 }
 
-// Start the frontend development server
-function startFrontend() {
+// Function to start frontend dev server
+function startFrontendDevServer() {
   console.log('Starting frontend development server...');
-  
-  // Use full path to npm to avoid ENOENT errors
   const npmCmd = os.platform() === 'win32' ? 'npm.cmd' : 'npm';
-  
-  const frontend = spawn(npmCmd, ['run', 'dev'], {
+  const frontendProcess = spawn(npmCmd, ['run', 'dev'], {
     stdio: 'inherit',
     shell: true
   });
-
-  frontend.on('error', (error) => {
-    console.error(`Failed to start frontend: ${error.message}`);
-    console.error('Make sure Node.js and npm are correctly installed and in your PATH');
+  
+  frontendProcess.on('error', (error) => {
+    console.error('Failed to start frontend server:', error);
   });
-
-  return frontend;
+  
+  return frontendProcess;
 }
 
-// Main function to start everything
-async function startAll() {
-  try {
-    console.log('Starting ICD-10-CM Browser with Server Backend...');
-    
-    // Start MongoDB first
-    await startMongoDB();
-    
-    // Then start the backend
-    const server = startBackend();
-    
-    // Wait a bit for the backend to initialize
-    setTimeout(() => {
-      // Then start the frontend
-      const frontend = startFrontend();
-      
-      // Handle graceful shutdown
-      process.on('SIGINT', () => {
-        console.log('Shutting down all services...');
-        frontend.kill();
-        server.kill();
-        process.exit(0);
-      });
-    }, 2000);
-    
-  } catch (error) {
-    console.error(`Failed to start: ${error.message}`);
-    process.exit(1);
+// Main function
+async function main() {
+  console.log('Starting ICD-10-CM Browser application...');
+  
+  // Check MongoDB
+  const mongoRunning = await isMongoDBRunning();
+  if (!mongoRunning) {
+    console.warn('\x1b[33mWARNING: MongoDB does not appear to be running!\x1b[0m');
+    console.warn('\x1b[33mPlease ensure MongoDB is installed and running on port 27017\x1b[0m');
+    console.warn('\x1b[33mOn Windows, check services.msc for MongoDB Service\x1b[0m');
+    console.warn('\x1b[33mOn macOS/Linux, run: sudo systemctl start mongodb\x1b[0m');
+    console.warn('\x1b[33mContinuing anyway, but the application may not work correctly...\x1b[0m\n');
+  } else {
+    console.log('\x1b[32mMongoDB is running. Good!\x1b[0m');
   }
+  
+  // Start Express server
+  const serverProcess = startExpressServer();
+  
+  // Start frontend dev server
+  const frontendProcess = startFrontendDevServer();
+  
+  // Handle application shutdown
+  const cleanup = () => {
+    console.log('\nShutting down...');
+    
+    if (serverProcess) {
+      serverProcess.kill();
+    }
+    
+    if (frontendProcess) {
+      frontendProcess.kill();
+    }
+    
+    process.exit(0);
+  };
+  
+  // Handle process termination
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
 }
 
-// Run the application
-startAll(); 
+// Run the main function
+main().catch(error => {
+  console.error('Error starting application:', error);
+  process.exit(1);
+}); 
