@@ -4,7 +4,24 @@ node_modules/
 # Build output
 dist/
 dist-ssr/
+release/
+build/
 *.local
+
+# Backup files
+backup/
+backup_removed/
+
+# MongoDB data
+/mongo_data
+
+# Uploaded files
+uploads/*
+!uploads/.gitkeep
+
+# Test results
+test-results/
+playwright-report/
 
 # Logs
 logs
@@ -31,6 +48,9 @@ data/*.json
 data/*.jsonl
 data/*.csv
 !data/.gitkeep
+
+# Ignore old data directories that have been replaced by MongoDB
+public/data/
 
 # Processed data files
 public/data/*

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { jsPDF } from 'jspdf';
 import { useTheme } from '../contexts/ThemeContext';
-import { getCode } from '../utils/dataProcessor';
+import { getCode } from '../utils/apiService';
 
 function CodeDetailPage() {
   const { codeId } = useParams();

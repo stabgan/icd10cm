@@ -1,148 +1,130 @@
-# ICD-10-CM Browser
+# ICD-10-CM Browser with MongoDB Backend
 
-[![Tests](https://github.com/stabgan/icd10cm-browser/actions/workflows/test.yml/badge.svg)](https://github.com/stabgan/icd10cm-browser/actions/workflows/test.yml)
+A web application for browsing and searching ICD-10-CM diagnosis codes with a Node.js/MongoDB backend.
 
-A modern, client-side web application for browsing and searching ICD-10-CM diagnosis codes. Built with React, Tailwind CSS, and IndexedDB for local data storage and processing.
+## Project Structure
 
-## Key Features
+This application uses a client-server architecture:
 
-- 🚀 **Efficient Large Data Handling**: Process up to 1.2GB of JSONL data directly in your browser
-- 🔍 **Advanced Multi-Level Search**: Quickly find codes by ID or keywords with smart fallbacks
-- 💾 **Fully Local Operation**: All data stays on your computer with IndexedDB storage
-- 📱 **Responsive Design**: Works on desktop, tablet, and mobile devices
-- 🌙 **Dark/Light Mode**: Automatically detects system preference with manual toggle option
-- 📊 **Detailed Code Views**: Format and display complex medical information with Markdown support
-- 🚦 **Progress Tracking**: Visual feedback during lengthy data processing operations
+- **Frontend**: React.js single-page application
+- **Backend**: Express.js server handling file uploads and data processing
+- **Database**: MongoDB for storing ICD-10 codes and search indexes
 
-## Getting Started
+## Setup Instructions
 
 ### Prerequisites
 
-- A modern web browser (Chrome, Firefox, or Edge recommended)
-- Node.js 16+ and npm for development
-- An ICD-10-CM data file in JSONL format
+- Node.js 14+ installed
+- MongoDB installed (or Docker with MongoDB image)
+- 2GB+ RAM for processing large datasets
 
-### Quick Start
+### Installation
 
-1. **Clone and Install**
-   ```bash
-   git clone https://github.com/stabgan/icd10cm-browser.git
-   cd icd10cm-browser
+1. Clone this repository
+2. Install dependencies:
+   ```
    npm install
    ```
+3. Install MongoDB if not already installed:
+   - **Windows**: [MongoDB Community Server](https://www.mongodb.com/try/download/community)
+   - **macOS**: `brew install mongodb-community`
+   - **Linux**: Follow the [MongoDB installation guide](https://docs.mongodb.com/manual/administration/install-on-linux/)
 
-2. **Start the Development Server**
-   ```bash
+### Running the Application
+
+#### Option 1: Start Everything with One Command
+```
+npm run start:all
+```
+This will:
+- Start MongoDB (or use already running instance)
+- Start the Express backend server
+- Start the React development server
+- Open your browser at http://localhost:3000
+
+#### Option 2: Start Components Separately
+
+1. Make sure MongoDB is running
+   ```
+   # Windows
+   net start MongoDB
+
+   # Linux/macOS
+   sudo systemctl start mongod
+   ```
+
+2. Start the server
+   ```
+   npm run server
+   ```
+
+3. Start the frontend (in a separate terminal)
+   ```
    npm run dev
    ```
 
-3. **Import Your Data**
-   - Launch the application in your browser
-   - Click "Upload Data File" and select your JSONL file
-   - Wait for processing to complete (progress bar will show status)
-   - Start searching and browsing codes!
+4. Open http://localhost:3000 in your browser
+
+### Importing Data
+
+1. Start the application
+2. You will see the upload screen if no data is present
+3. Upload your ICD-10-CM data file (JSONL format)
+4. Wait for processing to complete (this may take several minutes for large files)
+5. After completion, you'll be redirected to the main application
 
 ## Data Format
 
-The application expects a JSONL file with each line containing a JSON object in this format:
+The application expects JSONL files with each line containing a JSON object:
 
 ```json
-{"code":"A00.0","description":"Cholera due to Vibrio cholerae","detailed_context":"# Detailed information in Markdown format"}
+{
+  "code": "A00.0",
+  "description": "Cholera due to Vibrio cholerae 01, biovar cholerae",
+  "detailed_context": "# Detailed information...\nMore details about the code..."
+}
 ```
 
-Each entry must include:
-- `code`: The ICD-10-CM code identifier (e.g., "E11.9")
-- `description`: A brief description of the code
-- `detailed_context`: Detailed information formatted in Markdown
+## Building for Production
 
-## Usage Guide
+To build the application for production:
 
-### Searching for Codes
-
-The search functionality offers multiple ways to find what you need:
-
-- **Direct Code Search**: Enter a code ID like "A00.1" for exact matches
-- **Keyword Search**: Enter terms like "diabetes" to find related codes
-- **Real-time Suggestions**: See up to 10 matching suggestions as you type
-- **Full Results View**: View complete search results in the grid layout
-
-Search tips:
-- Press Enter to execute a search
-- Clear the search with the X button to start over
-- Click any suggestion to view its details
-
-### Viewing Code Details
-
-When viewing a specific code:
-- See the formal code ID and short description
-- Read the detailed context with proper Markdown formatting
-- Use the browser's back button to return to your search results
-
-### Data Management
-
-Your data is stored locally in your browser using IndexedDB:
-- No data is sent to any server
-- Your browser needs permission to use local storage
-- Data persists between sessions until you clear it
-
-## Development Features
-
-### Running Tests
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run end-to-end tests with Playwright
-npm run test:e2e
 ```
-
-### Building for Production
-
-```bash
 npm run build
+npm run start
 ```
 
-This creates optimized assets in the `dist` folder that can be served from any static file server.
+The server will serve both the API and the static frontend files.
+
+## Project Structure
+
+```
+/
+├── server.js            - Express server with MongoDB integration
+├── start.js             - Helper script to start everything
+├── uploads/             - Temporary directory for file uploads
+├── mongo_data/          - MongoDB data directory (created on first run)
+├── src/                 - React frontend application
+│   ├── components/      - UI components
+│   ├── contexts/        - React context providers
+│   ├── pages/           - Page components
+│   └── utils/           - Utility functions including API service
+└── public/              - Static assets
+```
 
 ## Troubleshooting
 
-### Import Issues
+### MongoDB Issues
 
-If you encounter problems during data import:
-- Ensure your JSONL file is properly formatted
-- Try a smaller file first to test the import process
-- Check the browser console for specific error messages
-- Use Chrome or Edge for best IndexedDB performance
+- **MongoDB Not Found**: Ensure MongoDB is installed and added to your PATH. You can verify this by running `mongod --version` in your terminal.
+- **Connection Issues**: Make sure MongoDB is running on the default port (27017). If it's using a different port, update the URI in server.js.
+- **Permission Issues**: On Linux/macOS, you might need to run MongoDB with sudo or fix the permissions on the mongo_data directory.
 
-### Search Not Working
+### Server Issues
 
-If search isn't returning expected results:
-- Check that your data was successfully imported (you should see results count)
-- Try searching for specific codes to verify indexing
-- Clear the search and try again with different terms
-- Reload the page if the interface becomes unresponsive
-
-### Browser Compatibility
-
-This application works best in:
-- Google Chrome (recommended)
-- Microsoft Edge
-- Firefox
-- Safari (with some limitations)
-
-## Technical Details
-
-- **UI Framework**: React with React Router for navigation
-- **Styling**: Tailwind CSS for responsive design
-- **Data Storage**: IndexedDB via the idb library
-- **Search Algorithm**: Multi-level with exact matching and fallbacks
-- **Testing**: Vitest with React Testing Library and Playwright
-- **Build System**: Vite for fast development and optimized builds
+- **Port Conflicts**: The server runs on port 5000 by default. If another application is using this port, change the `port` variable in server.js.
+- **ES Module Errors**: This application uses ES modules. Ensure you're using Node.js version 14+ and that all import/export statements are correct.
 
 ## License
 
-This project is licensed under the MIT License. 
+MIT License - See LICENSE file for details. 

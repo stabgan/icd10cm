@@ -6,7 +6,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import LoadingScreen from './components/LoadingScreen';
 import { useTheme } from './contexts/ThemeContext';
-import { checkDataLoaded, getIndexData } from './utils/dataProcessor';
+import { checkDataLoaded, getIndexData } from './utils/apiService';
 import SplashScreen from './components/SplashScreen';
 
 function App() {
@@ -19,22 +19,21 @@ function App() {
     // Check if the data is available
     const checkDataAvailability = async () => {
       try {
-        // First check if we have data in IndexedDB
+        // Check if data is available on the server
         const dataLoaded = await checkDataLoaded();
         
         if (dataLoaded) {
-          // If data is loaded in IndexedDB, use it
+          // If data is loaded on the server, get metadata
           const indexData = await getIndexData();
           setDataStatus({ 
             loaded: true, 
-            totalCodes: indexData.totalCodes || 0, 
-            chunkCount: indexData.chunkCount || 0,
+            totalCodes: indexData.totalCodes || 0,
             lastUpdated: indexData.lastUpdated || new Date().toISOString(),
             dataAvailable: true
           });
           setNeedsDataUpload(false);
         } else {
-          // No data in IndexedDB, user needs to upload
+          // No data on server, user needs to upload
           console.log('No data available, need user to upload data');
           setNeedsDataUpload(true);
         }

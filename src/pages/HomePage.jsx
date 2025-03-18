@@ -5,22 +5,35 @@ import { useTheme } from '../contexts/ThemeContext';
 
 function HomePage({ dataStatus }) {
   const [searchResults, setSearchResults] = useState([]);
+  const [showEasterEgg, setShowEasterEgg] = useState(false);
   const { darkMode } = useTheme();
 
+  const toggleEasterEgg = () => {
+    setShowEasterEgg(!showEasterEgg);
+  };
+
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="text-center mb-4">
-        <p className="text-pink-500 font-cursive text-xl animate-pulse" 
-           style={{ 
-             fontFamily: 'cursive', 
-             background: 'linear-gradient(to right, #ff5e95, #ff9eb6)', 
-             WebkitBackgroundClip: 'text', 
-             WebkitTextFillColor: 'transparent',
-             textShadow: '0 0 5px rgba(255, 105, 180, 0.3)'
-           }}>
-          Created with love for the most beautiful girl in the world, Queen Pukai ❤️
-        </p>
-      </div>
+    <div className="max-w-6xl mx-auto relative min-h-screen pb-20">
+      {showEasterEgg && (
+        <div className="text-center mb-4 animate-fadeIn">
+          <p className="text-pink-500 font-cursive text-xl animate-pulse" 
+             style={{ 
+               fontFamily: 'cursive', 
+               background: 'linear-gradient(to right, #ff5e95, #ff9eb6)', 
+               WebkitBackgroundClip: 'text', 
+               WebkitTextFillColor: 'transparent',
+               textShadow: '0 0 5px rgba(255, 105, 180, 0.3)'
+             }}>
+            Created with love for the most beautiful girl in the world, Queen Pukai ❤️
+          </p>
+          <p className="mt-2 text-indigo-500 font-bold">
+            CREATED BY MUSAFIR
+          </p>
+          <p className="mt-1 text-indigo-400 italic">
+            🦁 Lord of the Night & King of All Animals
+          </p>
+        </div>
+      )}
       
       <div className="text-center mb-12">
         <h1 className={`text-4xl font-bold mb-4 ${darkMode ? 'text-blue-400' : 'text-blue-800'}`}>
@@ -87,6 +100,22 @@ function HomePage({ dataStatus }) {
           </ul>
         </div>
       )}
+      
+      {/* Easter egg button */}
+      <button 
+        onClick={toggleEasterEgg}
+        className={`fixed bottom-5 left-5 w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${
+          darkMode
+            ? 'bg-blue-800 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/50'
+            : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md'
+        }`}
+        aria-label="Fun Surprise"
+        title="Funsie Button"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </button>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { searchCodes } from '../utils/dataProcessor';
+import { searchCodes } from '../utils/apiService';
 
 function Search({ onSearchResults }) {
   const [query, setQuery] = useState('');
@@ -24,13 +24,21 @@ function Search({ onSearchResults }) {
         !inputRef.current.contains(event.target)
       ) {
         setSuggestions([]);
-        setFocused(false);
+        // Don't set focused to false - allows input to keep focus
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Maintain focus on the input - new effect
+  useEffect(() => {
+    // This ensures the input remains focused during interactions
+    if (inputRef.current && focused) {
+      inputRef.current.focus();
+    }
+  }, [focused, suggestions, loading]);
 
   // Perform search and maintain focus
   const performSearch = useCallback(
@@ -46,7 +54,7 @@ function Search({ onSearchResults }) {
       setLoading(true);
       
       try {
-        // Search using the dataProcessor utility
+        // Search using the API service
         const results = await searchCodes(value);
         
         // Ensure we keep focus on the input
@@ -65,6 +73,10 @@ function Search({ onSearchResults }) {
         console.error('Error searching codes:', error);
       } finally {
         setLoading(false);
+        // Keep input focused after search completes
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
       }
     },
     [onSearchResults]
@@ -108,8 +120,16 @@ function Search({ onSearchResults }) {
     }
   };
 
+  // Ensure input maintains focus when clicking within the component
+  const handleComponentClick = () => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+      setFocused(true);
+    }
+  };
+
   return (
-    <div className="w-full max-w-4xl mx-auto relative">
+    <div className="w-full max-w-4xl mx-auto relative" onClick={handleComponentClick}>
       <div className="relative">
         <div className={`relative rounded-xl transition-all duration-300 ${
           focused 
@@ -126,6 +146,13 @@ function Search({ onSearchResults }) {
             value={query}
             onChange={handleInputChange}
             onFocus={() => setFocused(true)}
+            onBlur={(e) => {
+              // Only blur if clicking outside the component
+              if (!e.currentTarget.contains(e.relatedTarget)) {
+                // Keep focused state true to maintain the visual focus indicator
+                // but allow suggestions to close when clicking outside
+              }
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Search for an ICD-10-CM code or description..."
             className={`w-full p-5 pr-16 text-lg rounded-xl border-0 outline-none focus:ring-0 ${

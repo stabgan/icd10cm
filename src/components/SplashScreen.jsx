@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { processICD10Data } from '../utils/dataProcessor';
+
+// Backend API URL
+const API_URL = 'http://localhost:5000/api';
 
 function SplashScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -16,7 +18,24 @@ function SplashScreen() {
   useEffect(() => {
     // Check if Electron API is available
     setIsElectron(typeof window !== 'undefined' && window.electronAPI !== undefined);
+    
+    // Check if data is already loaded
+    checkDataLoaded();
   }, []);
+  
+  // Check if data is already loaded on the server
+  const checkDataLoaded = async () => {
+    try {
+      const response = await fetch(`${API_URL}/check-data`);
+      const data = await response.json();
+      
+      if (data.dataLoaded) {
+        navigate('/');
+      }
+    } catch (error) {
+      console.error('Error checking data loaded:', error);
+    }
+  };
 
   const processFile = async (file) => {
     if (!file) return;
@@ -31,17 +50,54 @@ function SplashScreen() {
       setError(null);
       setProgress(0);
       
-      // Process the file
-      await processICD10Data(file, (progressValue) => {
-        setProgress(progressValue);
+      // Create form data for file upload
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      // Send file to the server
+      const uploadResponse = await fetch(`${API_URL}/process-file`, {
+        method: 'POST',
+        body: formData
       });
       
-      // Once processing is complete, redirect to home page
-      setTimeout(() => {
-        // Use window.location.reload() to ensure a complete refresh
-        // This is more reliable than navigate('/') in this context
-        window.location.reload();
-      }, 1000);
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || 'Error uploading file');
+      }
+      
+      // Setup EventSource to monitor processing progress
+      const eventSource = new EventSource(`${API_URL}/processing-status`);
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setProgress(data.progress || 0);
+          
+          if (data.error) {
+            setError(data.error);
+            eventSource.close();
+            setIsProcessing(false);
+          }
+          
+          // If processing is complete
+          if (!data.inProgress && data.progress === 100) {
+            eventSource.close();
+            // Processing complete, redirect to home
+            setTimeout(() => {
+              navigate('/');
+            }, 1000);
+          }
+        } catch (e) {
+          console.error('Error parsing status data:', e);
+        }
+      };
+      
+      eventSource.onerror = () => {
+        console.error('EventSource error');
+        eventSource.close();
+        setError('Lost connection to the server');
+        setIsProcessing(false);
+      };
       
     } catch (err) {
       console.error('Error processing file:', err);
@@ -69,34 +125,11 @@ function SplashScreen() {
       const fileName = filePath.split(/[\\/]/).pop();
       const fileType = fileName.endsWith('.jsonl') ? 'application/jsonl' : 'application/json';
       
-      // Create a custom File-like object that works with our existing processing logic
-      const fileObject = {
-        name: fileName,
-        size: fileStats.size,
-        type: fileType,
-        path: filePath,
-        // Override slice method to use Electron IPC for file reading
-        slice: async (start, end) => {
-          const chunkText = await window.electronAPI.readFileChunk({ 
-            filePath, 
-            start, 
-            end: end - 1 // end is inclusive in Node.js API
-          });
-          
-          // Return a Blob that can be converted to text
-          return new Blob([chunkText], { type: fileType });
-        },
-        // Add text method to mimic File interface
-        text: async function() {
-          return window.electronAPI.readFileChunk({ 
-            filePath, 
-            start: 0, 
-            end: this.size - 1 
-          });
-        }
-      };
+      // Read the file as a blob
+      const fileBlob = await window.electronAPI.readFileAsBlob(filePath);
+      const file = new File([fileBlob], fileName, { type: fileType });
       
-      await processFile(fileObject);
+      await processFile(file);
       
     } catch (err) {
       console.error('Error selecting file:', err);
@@ -179,7 +212,7 @@ function SplashScreen() {
           <li>Once complete, you'll be redirected to the ICD-10 browser automatically</li>
         </ol>
         <div className="mt-4 p-3 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200">
-          <p><strong>Note:</strong> {isElectron ? 'All data is processed locally and never uploaded to any server.' : 'Data is stored locally in your browser and never uploaded to any server.'}</p>
+          <p><strong>Note:</strong> {isElectron ? 'Data is processed on the local server and stored in MongoDB.' : 'Data is uploaded to your local server and stored in MongoDB.'}</p>
         </div>
 
         {isElectron && (

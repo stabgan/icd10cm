@@ -24,7 +24,15 @@ export default defineConfig(async ({ command, mode }) => {
     base: isElectron ? './' : '/',
     plugins: [
       react(),
-      nodePolyfills(),
+      nodePolyfills({
+        // To fix flexsearch and other modules that use Node.js APIs
+        include: ['path', 'fs', 'util', 'process', 'buffer', 'stream'],
+        globals: {
+          Buffer: true,
+          global: true,
+          process: true,
+        },
+      }),
     ],
     server: {
       port: 3000, // Changed to match electron:start script
@@ -52,12 +60,23 @@ export default defineConfig(async ({ command, mode }) => {
           entryFileNames: 'assets/[name]-[hash].js',
           chunkFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name]-[hash].[ext]'
-        }
-      }
+        },
+      },
     },
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src'),
+        // Use the ESM version of flexsearch
+        'flexsearch': resolve(__dirname, 'node_modules/flexsearch/dist/flexsearch.bundle.module.min.js')
+      },
+      extensions: ['.js', '.jsx', '.ts', '.tsx', '.json']
+    },
+    optimizeDeps: {
+      include: ['flexsearch'],
+      esbuildOptions: {
+        define: {
+          global: 'globalThis'
+        }
       }
     },
     define: {
@@ -69,14 +88,6 @@ export default defineConfig(async ({ command, mode }) => {
       global: 'globalThis',
       // Indicate if we're running in Electron
       __IS_ELECTRON__: isElectron,
-    },
-    // Handle crypto for build
-    optimizeDeps: {
-      esbuildOptions: {
-        define: {
-          global: 'globalThis'
-        }
-      }
     },
     // Ensure data files are copied to the dist directory
     publicDir: 'public',
