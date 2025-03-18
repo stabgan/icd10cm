@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import Fuse from 'fuse.js';
 import { searchCodes } from '../utils/dataProcessor';
 
 function Search({ onSearchResults }) {
@@ -13,6 +12,7 @@ function Search({ onSearchResults }) {
   const suggestionsRef = useRef(null);
   const navigate = useNavigate();
   const { darkMode } = useTheme();
+  const searchTimerRef = useRef(null);
 
   // Handle click outside to close suggestions
   useEffect(() => {
@@ -32,10 +32,10 @@ function Search({ onSearchResults }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Debounced search function
-  const debouncedSearch = useCallback(
+  // Perform search and maintain focus
+  const performSearch = useCallback(
     async (value) => {
-      if (!value.trim()) {
+      if (!value || !value.trim()) {
         setSuggestions([]);
         if (onSearchResults) {
           onSearchResults([]);
@@ -48,6 +48,11 @@ function Search({ onSearchResults }) {
       try {
         // Search using the dataProcessor utility
         const results = await searchCodes(value);
+        
+        // Ensure we keep focus on the input
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
         
         // Update suggestions (top 10)
         setSuggestions(results.slice(0, 10));
@@ -66,19 +71,41 @@ function Search({ onSearchResults }) {
   );
 
   // Handle input change with debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      debouncedSearch(query);
-    }, 300);
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setQuery(value);
     
-    return () => clearTimeout(timer);
-  }, [query, debouncedSearch]);
+    // Clear any existing timer
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+    
+    // Set a new timer
+    searchTimerRef.current = setTimeout(() => {
+      performSearch(value);
+    }, 300);
+  };
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+    };
+  }, []);
 
   // Handle item selection
   const handleSelectItem = (code) => {
     navigate(`/code/${code}`);
     setSuggestions([]);
-    setFocused(false);
+  };
+
+  // Handle key press events
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && query.trim()) {
+      performSearch(query);
+    }
   };
 
   return (
@@ -97,8 +124,9 @@ function Search({ onSearchResults }) {
             ref={inputRef}
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={handleInputChange}
             onFocus={() => setFocused(true)}
+            onKeyDown={handleKeyDown}
             placeholder="Search for an ICD-10-CM code or description..."
             className={`w-full p-5 pr-16 text-lg rounded-xl border-0 outline-none focus:ring-0 ${
               darkMode 
@@ -107,6 +135,7 @@ function Search({ onSearchResults }) {
             }`}
             disabled={loading}
             aria-label="Search"
+            autoFocus
           />
           
           <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex">
@@ -115,7 +144,13 @@ function Search({ onSearchResults }) {
                 className={`mr-2 ${
                   darkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
                 } transition`}
-                onClick={() => setQuery('')}
+                onClick={() => {
+                  setQuery('');
+                  setSuggestions([]);
+                  if (onSearchResults) onSearchResults([]);
+                  // Return focus to input after clearing
+                  if (inputRef.current) inputRef.current.focus();
+                }}
                 aria-label="Clear search"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -132,11 +167,16 @@ function Search({ onSearchResults }) {
                 </svg>
               </div>
             ) : (
-              <div className={darkMode ? 'text-blue-400' : 'text-blue-500'}>
+              <button 
+                onClick={() => performSearch(query)}
+                className={`${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-500 hover:text-blue-700'} transition-colors`}
+                aria-label="Search"
+                disabled={loading || !query.trim()}
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-              </div>
+              </button>
             )}
           </div>
         </div>

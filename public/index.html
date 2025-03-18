@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <base href="/" />
     <title>ICD-10-CM Code Browser</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
@@ -14,51 +15,6 @@
     <meta property="og:description" content="Browse and search ICD-10-CM medical codes with detailed information" />
     <meta property="og:type" content="website" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    
-    <script>
-      // Dynamic base URL configuration
-      (function() {
-        // GitHub Pages deployment detection
-        const isGitHubPages = window.location.hostname.endsWith('github.io');
-        const hasCustomDomain = document.querySelector('meta[name="custom-domain"]') !== null;
-        
-        // Function to get the repository name from the path
-        function getRepoName() {
-          const path = window.location.pathname;
-          const segments = path.split('/');
-          if (segments.length > 1) {
-            return segments[1]; // The first segment after the leading slash
-          }
-          return '';
-        }
-        
-        // Create the base element
-        const base = document.createElement('base');
-        
-        // Handle GitHub Pages with custom domain
-        if (hasCustomDomain) {
-          base.href = '/';
-        } 
-        // Handle GitHub Pages without custom domain (username.github.io/repo-name)
-        else if (isGitHubPages) {
-          // For GitHub Pages, use the repository name as the base
-          const repoName = getRepoName() || 'icd10cm';
-          base.href = `/${repoName}/`;
-        } 
-        // Development or other hosting
-        else {
-          base.href = '/';
-        }
-        
-        // Insert the base element at the top of the head
-        document.head.insertBefore(base, document.head.firstChild);
-        
-        // Debug information in console
-        console.log('Base href set to:', base.href);
-        console.log('Is GitHub Pages:', isGitHubPages);
-        console.log('Has custom domain:', hasCustomDomain);
-      })();
-    </script>
     
     <!-- Preconnect to Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">

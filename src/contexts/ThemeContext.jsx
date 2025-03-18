@@ -14,14 +14,29 @@ export function ThemeProvider({ children }) {
   // Check for system preference or saved preference
   const getInitialTheme = () => {
     // Check if a theme preference is stored in localStorage
-    const savedTheme = localStorage.getItem('darkMode');
-    
-    if (savedTheme !== null) {
-      return savedTheme === 'true';
+    try {
+      const savedTheme = localStorage.getItem('darkMode');
+      
+      if (savedTheme !== null) {
+        return savedTheme === 'true';
+      }
+      
+      // Check for system preference if matchMedia is available
+      if (typeof window !== 'undefined' && window.matchMedia) {
+        try {
+          const matcher = window.matchMedia('(prefers-color-scheme: dark)');
+          return matcher.matches;
+        } catch (mediaError) {
+          console.error('Error with matchMedia:', mediaError);
+          return false; // Default to light if matchMedia fails
+        }
+      }
+    } catch (error) {
+      console.error('Error detecting theme preference:', error);
     }
     
-    // Check for system preference
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    // Default to light theme
+    return false;
   };
 
   const [darkMode, setDarkMode] = useState(false);
@@ -33,14 +48,20 @@ export function ThemeProvider({ children }) {
 
   // Update the DOM when dark mode changes
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+    if (typeof document !== 'undefined') {
+      if (darkMode) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      
+      // Save preference to localStorage
+      try {
+        localStorage.setItem('darkMode', String(darkMode));
+      } catch (error) {
+        console.error('Error saving theme preference:', error);
+      }
     }
-    
-    // Save preference to localStorage
-    localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
 
   // Toggle dark mode function

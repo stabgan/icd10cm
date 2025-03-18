@@ -32,7 +32,9 @@ function SplashScreen() {
       
       // Once processing is complete, redirect to home page
       setTimeout(() => {
-        navigate('/');
+        // Use window.location.reload() to ensure a complete refresh
+        // This is more reliable than navigate('/') in this context
+        window.location.reload();
       }, 1000);
       
     } catch (err) {

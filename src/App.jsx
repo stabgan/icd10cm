@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import HomePage from './pages/HomePage';
 import CodeDetailPage from './pages/CodeDetailPage';
@@ -8,45 +8,6 @@ import LoadingScreen from './components/LoadingScreen';
 import { useTheme } from './contexts/ThemeContext';
 import { checkDataLoaded, getIndexData } from './utils/dataProcessor';
 import SplashScreen from './components/SplashScreen';
-
-// Helper component to check for GitHub Pages redirects
-const GithubPagesRedirectHandler = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  
-  useEffect(() => {
-    // Check if we have a redirect from 404.html
-    const redirect = sessionStorage.getItem('redirect');
-    if (redirect) {
-      // Clear the redirect param
-      sessionStorage.removeItem('redirect');
-      
-      // Extract the path from the stored redirect path
-      const redirectPath = redirect.split('?p=/')[1] || '/';
-      if (redirectPath && redirectPath !== location.pathname) {
-        navigate(redirectPath);
-      }
-      return;
-    }
-    
-    // Check for query param redirect from GitHub Pages
-    const query = new URLSearchParams(location.search);
-    const path = query.get('p');
-    if (path) {
-      // Remove the 'p' query parameter but keep others
-      const newSearch = new URLSearchParams(location.search);
-      newSearch.delete('p');
-      
-      // Navigate to the path while preserving other query params
-      navigate({
-        pathname: path,
-        search: newSearch.toString()
-      });
-    }
-  }, [navigate, location]);
-  
-  return null;
-};
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -73,58 +34,9 @@ function App() {
           });
           setNeedsDataUpload(false);
         } else {
-          // No data in IndexedDB, check if we have pre-packaged data
-          try {
-            // Try to get the base URL for the current environment
-            const basePath = import.meta.env.BASE_URL || '/';
-            // Ensure basePath ends with a slash
-            const normalizedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`;
-            
-            // Construct the full URL for the data file
-            const dataPath = 'data/index.json';
-            let dataUrl;
-            
-            // Handle different environments
-            if (window.location.hostname === 'stabgan.com') {
-              // For custom domain
-              dataUrl = `${window.location.origin}/icd10cm/${dataPath}`;
-            } else if (window.location.hostname.includes('github.io')) {
-              // For GitHub Pages
-              dataUrl = `${window.location.origin}/icd10cm/${dataPath}`;
-            } else {
-              // For development
-              dataUrl = `${window.location.origin}${normalizedBasePath}${dataPath}`;
-            }
-            
-            console.log('Checking for pre-packaged data at:', dataUrl);
-            
-            const response = await fetch(dataUrl);
-            if (!response.ok) {
-              throw new Error("Pre-packaged data not available");
-            }
-            
-            const data = await response.json();
-            
-            if (data.totalCodes > 0) {
-              // We have valid pre-packaged data
-              setDataStatus({ 
-                loaded: true, 
-                totalCodes: data.totalCodes, 
-                chunkCount: data.chunkCount,
-                lastUpdated: data.lastUpdated,
-                dataAvailable: true
-              });
-              setNeedsDataUpload(false);
-            } else {
-              // Pre-packaged data exists but is empty/placeholder
-              console.log('Pre-packaged data is empty, need user to upload data');
-              setNeedsDataUpload(true);
-            }
-          } catch (fetchError) {
-            // No pre-packaged data available, need user to upload
-            console.log('No pre-packaged data available, need user to upload data');
-            setNeedsDataUpload(true);
-          }
+          // No data in IndexedDB, user needs to upload
+          console.log('No data available, need user to upload data');
+          setNeedsDataUpload(true);
         }
       } catch (error) {
         console.error('Failed to check data availability:', error);
@@ -144,23 +56,15 @@ function App() {
   }
   
   if (needsDataUpload) {
-    return <SplashScreen />;
+    return (
+      <Router>
+        <SplashScreen />
+      </Router>
+    );
   }
 
-  // Get the base URL for GitHub Pages
-  const getBasename = () => {
-    // In development, use root
-    if (process.env.NODE_ENV !== 'production') {
-      return '/';
-    }
-    
-    // In production, use the icd10cm subdirectory path
-    return '/icd10cm';
-  };
-
   return (
-    <Router basename={getBasename()}>
-      <GithubPagesRedirectHandler />
+    <Router>
       <div className={`min-h-screen flex flex-col ${
         darkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'
       } transition-colors duration-300`}>

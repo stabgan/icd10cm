@@ -1,97 +1,108 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
+import { readPackageJSON } from 'pkg-types'
 import { resolve } from 'path'
 import fs from 'fs'
 import path from 'path'
 
-// Get the repository name or use custom path for production
-const getBasePath = () => {
-  // Always use /icd10cm/ for production builds
-  if (process.env.NODE_ENV === 'production') {
-    return '/icd10cm/';
-  }
-  
-  // Default for development
-  return '/';
-};
-
-// Check if terser is installed - ESM compatible approach
-let minifyOption = 'esbuild'; // Default to esbuild
+// We'll check if terser is available for minification
+let minify = 'esbuild'
 try {
-  // Use fs to check if terser exists in node_modules
-  const terserPath = path.resolve('node_modules', 'terser');
-  if (fs.existsSync(terserPath)) {
-    minifyOption = 'terser'; // Use terser if available
-  }
-} catch (e) {
-  console.warn('Terser not found, using esbuild for minification');
+  require.resolve('terser')
+  minify = 'terser'
+} catch (error) {
+  console.warn('Terser not found, using esbuild for minification')
 }
 
 // https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 3030
-  },
-  // Set the base path for builds
-  base: getBasePath(),
-  build: {
-    outDir: 'dist',
-    minify: minifyOption,
-    sourcemap: false,
-    // Fix asset path issues in production build
-    assetsDir: 'assets',
-    assetsInlineLimit: 4096, // 4kb
-    cssCodeSplit: true,
-    rollupOptions: {
-      input: {
-        main: resolve(__dirname, 'index.html'),
-      },
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['react-markdown', 'file-saver', 'fuse.js'],
+export default defineConfig(async ({ command, mode }) => {
+  const pkg = await readPackageJSON()
+  
+  return {
+    base: '/',
+    plugins: [
+      react(),
+      nodePolyfills(),
+    ],
+    server: {
+      port: 5173,
+      strictPort: false,
+    },
+    build: {
+      outDir: 'dist',
+      emptyOutDir: true,
+      minify: minify,
+      cssMinify: true,
+      sourcemap: false,
+      // Fix asset path issues in build
+      assetsDir: 'assets',
+      assetsInlineLimit: 4096, // 4kb
+      cssCodeSplit: true,
+      rollupOptions: {
+        input: {
+          main: resolve(__dirname, 'index.html'),
         },
-        // Ensure proper path for chunks
-        chunkFileNames: 'assets/js/[name]-[hash].js',
-        entryFileNames: 'assets/js/[name]-[hash].js',
-        assetFileNames: (assetInfo) => {
-          // Keep data files in their original structure with original names
-          if (assetInfo.name && (assetInfo.name.endsWith('.json') || assetInfo.name.includes('data/'))) {
-            const parts = assetInfo.name.split('/');
-            const fileName = parts[parts.length - 1];
-            if (parts.includes('data')) {
-              // Preserve the full path for data files
-              return assetInfo.name;
-            }
-            return `data/${fileName}`;
-          }
-          return 'assets/[ext]/[name]-[hash].[ext]';
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', 'react-router-dom'],
+            utils: ['idb'],
+          },
+          entryFileNames: 'assets/[name]-[hash].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash].[ext]'
         }
       }
-    }
-  },
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src'),
-    }
-  },
-  define: {
-    // Fix for crypto.getRandomValues in Node.js environment
-    'process.env': {},
-    // Ensure global and window are defined
-    global: 'globalThis',
-    // Explicitly make BASE_URL available to the application
-    '__APP_BASE_PATH__': JSON.stringify(getBasePath())
-  },
-  // Handle crypto for GitHub Actions build
-  optimizeDeps: {
-    esbuildOptions: {
-      define: {
-        global: 'globalThis'
+    },
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src'),
       }
-    }
-  },
-  // Ensure data files are copied to the dist directory
-  publicDir: 'public'
+    },
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version),
+      __BASE_PATH__: JSON.stringify('/'),
+      // Fix for crypto.getRandomValues in Node.js environment
+      'process.env': {},
+      // Ensure global and window are defined
+      global: 'globalThis',
+    },
+    // Handle crypto for build
+    optimizeDeps: {
+      esbuildOptions: {
+        define: {
+          global: 'globalThis'
+        }
+      }
+    },
+    // Ensure data files are copied to the dist directory
+    publicDir: 'public',
+    preview: {
+      port: 5173,
+      strictPort: false,
+    },
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: ['./src/test/setup.js'],
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'html'],
+        exclude: ['node_modules/', 'src/test/', '**/*.d.ts'],
+      },
+      include: ['src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
+      exclude: [
+        '**/node_modules/**', 
+        '**/dist/**', 
+        '**/playwright/**',
+        '**/e2e/**',
+        '**/test/e2e/**',
+        'src/test/e2e/**',
+        '**/playwright.config.{js,ts}',
+        '**/*.e2e.spec.{js,jsx,ts,tsx}',
+        '**/e2e/*.spec.{js,jsx,ts,tsx}',
+        '**/*.config.{js,ts}'
+      ],
+    },
+  }
 }) 

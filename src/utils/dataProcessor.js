@@ -286,34 +286,65 @@ export async function searchCodes(query) {
   
   try {
     const db = await openDB(DB_NAME, DB_VERSION);
-    const tx = db.transaction(SEARCH_INDEX_STORE, 'readonly');
+    const tx = db.transaction([SEARCH_INDEX_STORE, CHUNKS_STORE], 'readonly');
     const searchStore = tx.objectStore(SEARCH_INDEX_STORE);
+    const chunksStore = tx.objectStore(CHUNKS_STORE);
     const searchIndex = await searchStore.get('main');
     
-    if (!searchIndex || !searchIndex.data) return [];
+    if (!searchIndex || !searchIndex.data) {
+      console.log('No search index found - attempting direct search');
+      return await directCodeSearch(query, chunksStore);
+    }
     
     const results = new Map();
     const searchTerms = query.toLowerCase().split(/\s+/);
     
-    // Search for exact code match first
-    if (searchIndex.data[query]) {
-      const exactMatch = searchIndex.data[query];
-      if (Array.isArray(exactMatch)) {
-        exactMatch.forEach(item => {
+    // Search for exact code match first (highest priority)
+    const upperQuery = query.toUpperCase();
+    if (upperQuery.match(/^[A-Z][0-9]+(\.[0-9]+)?$/)) {
+      // This looks like a code - do direct search
+      const codeLetter = upperQuery.charAt(0);
+      const chunk = await chunksStore.get(codeLetter);
+      
+      if (chunk && chunk.codes) {
+        const exactMatches = chunk.codes.filter(item => 
+          item.code.startsWith(upperQuery)
+        );
+        
+        exactMatches.forEach(item => {
           results.set(item.code, item);
         });
-      } else {
-        results.set(exactMatch.code, exactMatch);
+        
+        // If we found exact matches by code, return them immediately
+        if (results.size > 0) {
+          return Array.from(results.values());
+        }
       }
     }
+    
+    // Look for exact matches in search index
+    const indexKeys = Object.keys(searchIndex.data);
+    
+    // First try exact matches on full query
+    indexKeys.forEach(key => {
+      if (key.toLowerCase().includes(query.toLowerCase())) {
+        const matches = searchIndex.data[key];
+        if (Array.isArray(matches)) {
+          matches.forEach(item => {
+            results.set(item.code, item);
+          });
+        } else if (matches) {
+          results.set(matches.code, matches);
+        }
+      }
+    });
     
     // Then search for each term
     for (const term of searchTerms) {
       if (term.length < 2) continue;
       
-      // Look for exact matches in search index
-      Object.keys(searchIndex.data).forEach(key => {
-        if (key.includes(term)) {
+      indexKeys.forEach(key => {
+        if (key.toLowerCase().includes(term.toLowerCase())) {
           const matches = searchIndex.data[key];
           if (Array.isArray(matches)) {
             matches.forEach(item => {
@@ -326,9 +357,56 @@ export async function searchCodes(query) {
       });
     }
     
+    // If no results found from index, try direct search
+    if (results.size === 0) {
+      console.log('No results found in index - attempting direct search');
+      const directResults = await directCodeSearch(query, chunksStore);
+      directResults.forEach(item => {
+        results.set(item.code, item);
+      });
+    }
+    
     return Array.from(results.values());
   } catch (error) {
     console.error('Error searching codes:', error);
+    return [];
+  }
+}
+
+// Perform a direct search on all codes
+async function directCodeSearch(query, storeOrTx) {
+  const results = [];
+  const lowerQuery = query.toLowerCase();
+  
+  try {
+    let chunksStore = storeOrTx;
+    if (!chunksStore.get) {
+      // If we were passed a transaction, get the store
+      chunksStore = storeOrTx.objectStore(CHUNKS_STORE);
+    }
+    
+    // Get all letters (A-Z)
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    
+    for (const letter of letters) {
+      const chunk = await chunksStore.get(letter);
+      if (!chunk || !chunk.codes) continue;
+      
+      // Search codes in this chunk
+      const matchingCodes = chunk.codes.filter(code => 
+        code.code.toLowerCase().includes(lowerQuery) || 
+        code.description.toLowerCase().includes(lowerQuery)
+      );
+      
+      results.push(...matchingCodes);
+      
+      // Limit to prevent too many results
+      if (results.length > 200) break;
+    }
+    
+    return results.slice(0, 100); // Return at most 100 results
+  } catch (error) {
+    console.error('Error in direct search:', error);
     return [];
   }
 } 

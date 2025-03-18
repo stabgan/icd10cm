@@ -1,203 +1,379 @@
-# Guide to Understanding the ICD-10-CM Browser Project for LLMs
+# ICD-10-CM Browser: Comprehensive Guide for LLMs
+
+This guide provides a detailed overview of the ICD-10-CM Browser application, designed to help LLMs and AI agents understand the architecture, data flow, implementation details, and recent optimizations.
 
 ## Project Overview
 
-This is a client-side web application designed to browse and search the International Classification of Diseases, 10th Revision, Clinical Modification (ICD-10-CM) codes. The application is built to handle large datasets (up to 1.2GB) containing 74,260 medical codes while running entirely in the browser without requiring server-side processing.
+The ICD-10-CM Browser is a React-based web application that allows users to search and browse International Classification of Diseases, 10th Revision, Clinical Modification (ICD-10-CM) codes. It operates entirely client-side, using browser storage (IndexedDB) to process and store large medical datasets without requiring a server.
 
-### Key Challenges & Solutions
+### Key Capabilities
+- Process large JSONL files (up to 1.2GB) directly in the browser
+- Store and index medical code data for efficient searching
+- Provide a responsive UI that works across all device sizes
+- Support dark/light mode theming based on user preference
+- Display detailed code information with Markdown formatting
+- Operate entirely offline with no server requirements
 
-1. **GitHub Size Constraints**: 
-   - GitHub has a 1GB total repository size limit and a 100MB individual file limit
-   - Solution: Instead of hosting the large data files in the repository, users bring their own data files
+## Architecture Overview
 
-2. **Large File Processing**:
-   - Processing a 1.2GB JSONL file in the browser could crash it
-   - Solution: The application reads and processes the file in 10MB chunks
+The application follows a modern React architecture with these key components:
 
-3. **Fast Search and Retrieval**:
-   - Users need fast search capabilities across 74,260 detailed medical codes
-   - Solution: Data is indexed and stored in IndexedDB with custom search functionality
-
-## Architecture
+### Main Application Structure
+```
+src/
+├── components/         # UI components
+├── context/           # React context providers
+├── utils/             # Utility functions and data processing
+├── test/              # Test files (unit, integration, e2e)
+├── assets/            # Static assets (images, icons)
+├── App.jsx            # Main application component
+└── main.jsx           # Application entry point
+```
 
 ### Core Components
+1. `SplashScreen` - Handles data upload and processing
+2. `Search` - Provides search interface with suggestions
+3. `CodeGrid` - Displays search results in a grid layout
+4. `CodeDetail` - Displays detailed information for a specific code
+5. `ThemeToggle` - Manages dark/light mode preferences
+6. `Header` and `Footer` - Application-wide navigation and information
 
-The application is a React single-page application with the following key components:
+## Data Flow
 
-1. **SplashScreen**: Shown when no data is loaded, prompts users to upload their data file
-2. **App**: Main component handling routing and global state
-3. **HomePage**: Landing page with search functionality
-4. **CodeDetailPage**: Detailed view of a specific ICD code
-5. **DataProcessor**: Utility for processing and storing ICD-10-CM data
+The application's data flow follows this pattern:
 
-### Data Flow
+1. **Initial Load**:
+   - Check if data exists in IndexedDB
+   - If not, show SplashScreen for data upload
+   - If data exists, show main interface
 
-1. User uploads a JSONL data file containing ICD-10-CM codes
-2. The file is processed in chunks by the dataProcessor utility
-3. Processed data is stored in the browser's IndexedDB
-4. The application loads data from IndexedDB for searching and displaying details
-5. Users can search for codes and view detailed information
+2. **Data Import Process**:
+   - User uploads JSONL file via SplashScreen
+   - File is processed in chunks to avoid memory issues
+   - Each chunk is parsed and stored in IndexedDB
+   - Indexes are created for efficient searching
+   - UI is refreshed to show search interface
 
-### Storage Strategy
+3. **Search Flow**:
+   - User enters query in Search component
+   - Search component sends query to dataProcessor
+   - dataProcessor searches IndexedDB with multi-tier strategy:
+     - First attempts exact code match
+     - Then searches through indexed terms
+     - Falls back to direct search if needed
+   - Results are returned to Search component
+   - Results are displayed in CodeGrid
 
-The application uses IndexedDB with four object stores:
-- `codes`: Stores individual code records
-- `chunks`: Stores codes organized by their first letter 
-- `index`: Stores metadata about the dataset
-- `search-index`: Stores indexed terms for efficient searching
+4. **Detail View Flow**:
+   - User selects code from search results
+   - App navigates to CodeDetail route
+   - CodeDetail component retrieves code data from IndexedDB
+   - Markdown content is rendered with proper formatting
 
-## Key Files and Their Roles
+## Storage Strategy
 
-### `src/App.jsx`
+The application uses IndexedDB with multiple stores:
 
-The main application component that:
-- Checks if data is already loaded in IndexedDB
-- Falls back to checking for pre-packaged data
-- Shows the SplashScreen if no data is found
-- Handles routing and page structure
+1. **`CHUNKS_STORE`** - Stores the actual code data:
+   - Key: Code ID (e.g., "A00.0")
+   - Value: Complete code object with description and detailed context
 
-### `src/utils/dataProcessor.js`
+2. **`SEARCH_INDEX_STORE`** - Stores search indexes:
+   - Key: Searchable term
+   - Value: Array of code IDs containing that term
 
-This is the core utility that handles:
-- File reading in chunks (10MB at a time)
-- Data parsing from JSONL format
-- Organization of codes by first letter
-- Building of search indices
-- Storage in IndexedDB
-- Retrieval functions for searching and fetching codes
+3. **`META_STORE`** - Stores metadata about the imported dataset:
+   - Key: Metadata property name
+   - Value: Property value (e.g., total count, import date)
 
-Key functions:
-- `processICD10Data`: Processes the uploaded file
-- `readFileInChunks`: Reads large files in manageable pieces
-- `searchCodes`: Searches the indexed data
-- `getCode`: Retrieves a specific code
+## Implementation Details
 
-### `src/components/SplashScreen.jsx`
+### Data Processing Pipeline
 
-The upload interface that:
-- Presents a file upload button to the user
-- Handles file selection and validation
-- Shows progress during processing
-- Redirects to the main application when complete
+The `dataProcessor.js` utility handles the core data management:
 
-### `src/components/Search.jsx`
+1. **File Processing**:
+   ```javascript
+   // Process file in chunks to avoid memory issues
+   async function processFile(file, progressCallback) {
+     const chunkSize = 10 * 1024 * 1024; // 10MB chunks
+     const db = await openDB();
+     let offset = 0;
+     
+     while (offset < file.size) {
+       // Read chunk, parse JSONL, store in IndexedDB
+       const chunk = file.slice(offset, offset + chunkSize);
+       await processChunk(chunk, db);
+       offset += chunkSize;
+       progressCallback(Math.min(100, Math.floor((offset / file.size) * 100)));
+     }
+     
+     // Build search indexes after all chunks are processed
+     await buildSearchIndex(db);
+   }
+   ```
 
-The search component that:
-- Provides an input field for searching
-- Implements debounced search
-- Displays suggestions as users type
-- Triggers search result display
+2. **Search Implementation**:
+   ```javascript
+   // Multi-tier search strategy
+   async function searchCodes(query) {
+     if (!query) return [];
+     const db = await openDB();
+     
+     // First try exact code match
+     const exactMatch = await db.get(CHUNKS_STORE, query.toUpperCase());
+     if (exactMatch) return [exactMatch];
+     
+     // Then try search index
+     try {
+       const tx = db.transaction([SEARCH_INDEX_STORE, CHUNKS_STORE], 'readonly');
+       const indexStore = tx.objectStore(SEARCH_INDEX_STORE);
+       const chunksStore = tx.objectStore(CHUNKS_STORE);
+       
+       // Check if search index exists
+       const indexCount = await indexStore.count();
+       if (indexCount === 0) {
+         // Fall back to direct search if no index
+         return directCodeSearch(query, chunksStore);
+       }
+       
+       // Search through index
+       const searchTerms = query.toLowerCase().split(/\s+/);
+       const results = new Map();
+       
+       for (const term of searchTerms) {
+         const codeIds = await indexStore.get(term);
+         if (codeIds) {
+           for (const id of codeIds) {
+             results.set(id, (results.get(id) || 0) + 1);
+           }
+         }
+       }
+       
+       // Sort by relevance and fetch full code objects
+       const sortedIds = [...results.entries()]
+         .sort((a, b) => b[1] - a[1])
+         .map(entry => entry[0])
+         .slice(0, 100);
+       
+       const codes = await Promise.all(
+         sortedIds.map(id => chunksStore.get(id))
+       );
+       
+       return codes.filter(Boolean);
+     } catch (error) {
+       console.error('Search error:', error);
+       return [];
+     }
+   }
+   
+   // Direct search fallback for when index is not available
+   async function directCodeSearch(query, store) {
+     console.log('Attempting direct search for:', query);
+     const allCodes = [];
+     const lowerQuery = query.toLowerCase();
+     
+     // Search all codes in the database
+     await store.openCursor().then(function processNextCode(cursor) {
+       if (!cursor || allCodes.length >= 100) return allCodes;
+       
+       const code = cursor.value;
+       if (code.code.toLowerCase().includes(lowerQuery) || 
+           code.description.toLowerCase().includes(lowerQuery)) {
+         allCodes.push(code);
+       }
+       
+       return cursor.continue().then(processNextCode);
+     });
+     
+     return allCodes;
+   }
+   ```
 
-### `src/pages/CodeDetailPage.jsx`
+### UI Components
 
-Displays detailed information about a selected code:
-- Shows the code, description, and detailed context
-- Renders the detailed context as Markdown
-- Provides PDF export functionality
-- Handles loading states and errors
+**SplashScreen Component**:
+- Handles file upload with drag-and-drop or file picker
+- Displays progress during file processing
+- Redirects to main interface after processing completes
+- Recently updated to use `window.location.reload()` for more reliable redirect
 
-### `src/pages/HomePage.jsx`
+**Search Component**:
+- Provides input field with real-time suggestions
+- Implements debounced search to prevent excessive database queries
+- Maintains focus on input field for better user experience
+- Uses click-outside detection to close suggestions when appropriate
+- Recently updated with improved focus handling and keyboard navigation
 
-The main landing page that:
-- Displays a search interface
-- Shows search results in a grid
-- Displays statistics about the loaded data
-- Provides instructions for use
+**CodeDetail Component**:
+- Fetches and displays detailed code information
+- Renders Markdown content with proper formatting
+- Provides navigation back to search results
+
+**ThemeToggle Component**:
+- Detects system color scheme preference
+- Allows manual override of theme
+- Persists preference in localStorage
+
+## Recent Optimizations
+
+### 1. Local-Only Usage Optimizations
+- Removed GitHub Pages deployment configuration
+- Simplified base path in Vite config to use root path ('/')
+- Enhanced error handling for browser APIs
+- Improved robustness of IndexedDB operations
+
+### 2. Search Functionality Improvements
+- Added multi-tier search strategy with fallbacks
+- Implemented direct search capability when index is not available
+- Enhanced search relevance by considering partial matches
+- Limited results to 100 entries for better performance
+- Added case-insensitive searching for better user experience
+
+### 3. UI and UX Enhancements
+- Fixed focus management in Search component
+- Added autoFocus attribute to search input
+- Converted search icon to a button for better accessibility
+- Implemented robust click-outside detection
+- Improved feedback during long-running operations
+
+### 4. Performance Optimizations
+- Implemented debounced search to reduce database load
+- Added cleanup functions to prevent memory leaks
+- Enhanced chunk processing to better handle large files
+- Improved error handling and recovery mechanisms
+
+### 5. Testing Framework Enhancements
+- Added Playwright for end-to-end testing
+- Improved test coverage for UI components
+- Enhanced mocking for IndexedDB in tests
+- Added integration tests for search and view functionality
+
+## Key Files and Their Functions
+
+### 1. `src/utils/dataProcessor.js`
+The central utility for data management with these key functions:
+- `openDB()` - Opens connection to IndexedDB
+- `processFile()` - Processes JSONL file in chunks
+- `buildSearchIndex()` - Creates search indexes for efficient queries
+- `searchCodes()` - Multi-tier search implementation
+- `getCode()` - Retrieves specific code details
+- `directCodeSearch()` - Fallback search method
+
+### 2. `src/components/Search.jsx`
+The search interface component with these features:
+- Debounced input handling
+- Suggestions display
+- Keyboard navigation
+- Focus management
+- Click-outside detection
+
+### 3. `src/components/SplashScreen.jsx`
+Handles data import with these capabilities:
+- File upload interface
+- Progress tracking
+- Error handling
+- Database reset option
+- Redirect after completion
+
+### 4. `src/context/ThemeContext.jsx`
+Manages application theming with:
+- System preference detection
+- Manual theme override
+- Theme persistence
+- Context provider for theme consumers
+
+### 5. `src/App.jsx`
+Main application component that:
+- Sets up routing
+- Handles theme context
+- Manages main application flow
+- Provides error boundaries
+
+## Testing Framework
+
+The project includes comprehensive testing at multiple levels:
+
+### 1. Unit Tests
+Located in `src/test` with files like:
+- `Header.test.jsx`
+- `Footer.test.jsx`
+- `ThemeToggle.test.jsx`
+- `dataProcessor.test.js`
+
+### 2. Integration Tests
+Tests component interactions:
+- `SearchAndView.test.jsx` - Tests search-to-detail flow
+
+### 3. End-to-End Tests
+Located in `src/test/e2e` using Playwright:
+- `basic.spec.js` - Tests core application flows
 
 ## Data Format
 
-The application expects a JSONL file where each line is a JSON object with these fields:
-- `code`: The ICD-10-CM code (e.g., "E11.9")
-- `description`: A short description of the code
-- `detailed_context`: Markdown text with detailed information about the code
-
-Example:
-```jsonl
-{"code":"A00.0","description":"Cholera due to Vibrio cholerae 01, biovar cholerae","detailed_context":"# Cholera due to Vibrio cholerae 01, biovar cholerae\n\n**Clinical Information**\n* An acute diarrheal illness caused by toxigenic VIBRIO CHOLERAE..."}
-{"code":"A00.1","description":"Cholera due to Vibrio cholerae 01, biovar eltor","detailed_context":"# Cholera due to Vibrio cholerae 01, biovar eltor\n\n**Clinical Information**\n* An acute diarrheal disease caused by VIBRIO CHOLERAE..."}
+The application expects data in JSONL format, with each line containing a JSON object:
+```json
+{"code":"A00.0","description":"Cholera due to Vibrio cholerae","detailed_context":"# Detailed information in Markdown format"}
 ```
 
-## Data Processing Workflow
+Each entry must include:
+- `code` - The ICD-10-CM code identifier (e.g., "E11.9")
+- `description` - Brief description of the code
+- `detailed_context` - Detailed information formatted in Markdown
 
-1. **File Upload**:
-   - User selects a JSONL file containing ICD-10-CM codes
-   - The file is validated for format
+## Performance Considerations
 
-2. **Chunked Reading**:
-   - The file is read in 10MB chunks to avoid memory issues
-   - Complete lines are extracted and processed
+To handle large datasets efficiently, the application:
+- Processes files in 10MB chunks
+- Uses a worker thread for intensive operations
+- Implements debounced search
+- Limits search results to manageable numbers
+- Uses IndexedDB cursors for optimal traversal
+- Implements cleanup functions to prevent memory leaks
 
-3. **Data Organization**:
-   - Codes are grouped by their first letter (A-Z)
-   - A search index is built based on code IDs and descriptions
+## Technology Stack
 
-4. **Storage**:
-   - Processed data is stored in IndexedDB
-   - Metadata about the dataset is saved
+- **React**: UI framework
+- **React Router**: For navigation
+- **Tailwind CSS**: For styling
+- **IndexedDB**: For client-side storage
+- **idb Library**: For IndexedDB interactions
+- **Markdown-it**: For Markdown rendering
+- **Vite**: For development and building
+- **Vitest**: For testing
+- **Playwright**: For end-to-end testing
 
-5. **Usage**:
-   - The application reads from IndexedDB for searching and display
-   - No further processing is needed until a new file is uploaded
+## Browser Compatibility
 
-## Search Implementation
+The application is designed to work in modern browsers:
+- **Google Chrome**: Primary test platform, best IndexedDB performance
+- **Microsoft Edge**: Fully supported
+- **Firefox**: Fully supported
+- **Safari**: Supported with some IndexedDB limitations
 
-The search function:
-1. Takes the user's query and splits it into terms
-2. Checks for exact code matches first
-3. Looks for keyword matches in the search index
-4. Returns a unified list of results
-5. Displays up to 10 suggestions while typing
-6. Shows all results on the HomePage
+## Troubleshooting Common Issues
 
-## Technical Details
+### 1. Data Import Failures
+- **Possible Causes**: Malformed JSONL, memory constraints, browser limits
+- **Solutions**: Verify file format, try smaller chunks, use Chrome/Edge
 
-- **UI Framework**: React with React Router for navigation
-- **Styling**: Tailwind CSS for responsive design
-- **Storage**: IndexedDB via the idb library
-- **PDF Generation**: jsPDF for exporting code details
-- **Markdown Rendering**: ReactMarkdown for detailed context
+### 2. Search Not Returning Expected Results
+- **Possible Causes**: Missing index, corrupted data, invalid query
+- **Solutions**: Reset database and reimport, verify search terms, check browser console
 
-## Performance Optimizations
+### 3. Display Issues
+- **Possible Causes**: CSS conflicts, browser compatibility issues
+- **Solutions**: Toggle theme, refresh page, clear browser cache
 
-1. **Chunked File Reading**: Prevents browser crashes with large files
-2. **Indexed Search**: Makes searching fast even with 74,000+ codes
-3. **Debounced Search**: Prevents excessive search operations while typing
-4. **Code Organization by Letter**: Enables efficient retrieval by code prefix
-5. **Client-side Processing**: No server needed, works entirely in the browser
+## Contributing Guidelines
 
-## Deployment Considerations
+To contribute to the project:
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Ensure all tests pass
+5. Submit a pull request
 
-The application is designed to be deployed on GitHub Pages with:
-- A base path of `/icd10cm/`
-- A 404.html for handling client-side routing
-- Placeholder data files when no user data is uploaded
+## Licensing
 
-## User Experience Flow
-
-1. First Visit:
-   - User sees a SplashScreen prompting for data upload
-   - User selects their ICD-10-CM data file
-   - File is processed with progress indication
-   - User is redirected to the main application
-
-2. Returning Visits:
-   - Data is already in IndexedDB
-   - User goes directly to the main application
-   - No need to re-upload data
-
-3. Searching:
-   - User types in the search box
-   - Suggestions appear as they type
-   - Results are displayed in a grid below
-   - User can click on any result for details
-
-4. Viewing Details:
-   - Code and short description are shown
-   - Detailed context is rendered as formatted Markdown
-   - User can download a PDF of the details
-
-## Summary
-
-This project is a sophisticated client-side solution for browsing large medical code datasets. It demonstrates advanced techniques for handling large files in the browser, efficient data storage, and fast search capabilities - all while maintaining a modern, responsive user interface with dark mode support and accessibility features.
-
-The architecture allows users to bring their own data while keeping the application itself lightweight and deployable on GitHub Pages, effectively working around GitHub's size limitations. 
+This project is licensed under the MIT License, allowing for free use, modification, and distribution with proper attribution. 
