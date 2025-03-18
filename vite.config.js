@@ -1,21 +1,23 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Get the repository name from package.json or environment variable
-const getRepoName = () => {
-  try {
-    // This will extract the repository name from the Git remote URL
-    // You should replace 'icd10cm' below with your actual repository name if different
+// Get the repository name or use custom path for production
+const getBasePath = () => {
+  // For production builds with custom domain, use '/icd10cm/'
+  if (process.env.NODE_ENV === 'production') {
     return '/icd10cm/';
-  } catch (e) {
-    return '/';
   }
+  return '/';
 };
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: process.env.NODE_ENV === 'production' ? getRepoName() : '/',
+  server: {
+    port: 3030
+  },
+  // Set the base path for builds
+  base: getBasePath(),
   build: {
     outDir: 'dist',
     minify: 'terser',
@@ -28,10 +30,5 @@ export default defineConfig({
         }
       }
     }
-  },
-  server: {
-    port: 3030,
-    strictPort: false,
-    open: true
   }
 }) 

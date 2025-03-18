@@ -15,17 +15,31 @@ const GithubPagesRedirectHandler = () => {
   useEffect(() => {
     // Check if we have a redirect from 404.html
     const redirect = sessionStorage.getItem('redirect');
-    if (redirect && redirect !== location.pathname) {
-      // Clear the redirect param and navigate
+    if (redirect) {
+      // Clear the redirect param
       sessionStorage.removeItem('redirect');
-      navigate(redirect);
+      
+      // Extract the path from the stored redirect path
+      const redirectPath = redirect.split('?p=/')[1] || '/';
+      if (redirectPath && redirectPath !== location.pathname) {
+        navigate(redirectPath);
+      }
+      return;
     }
     
     // Check for query param redirect from GitHub Pages
     const query = new URLSearchParams(location.search);
     const path = query.get('p');
     if (path) {
-      navigate(path);
+      // Remove the 'p' query parameter but keep others
+      const newSearch = new URLSearchParams(location.search);
+      newSearch.delete('p');
+      
+      // Navigate to the path while preserving other query params
+      navigate({
+        pathname: path,
+        search: newSearch.toString()
+      });
     }
   }, [navigate, location]);
   
@@ -78,7 +92,7 @@ function App() {
       return '/';
     }
     
-    // In production, use the repository name (from vite.config.js)
+    // In production, use the icd10cm subdirectory path
     return '/icd10cm';
   };
 
