@@ -57,6 +57,9 @@ export default defineConfig({
     assetsInlineLimit: 4096, // 4kb
     cssCodeSplit: true,
     rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+      },
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
@@ -65,7 +68,13 @@ export default defineConfig({
         // Ensure proper path for chunks
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
-        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]'
+        assetFileNames: (assetInfo) => {
+          // Special handling for JSON files to ensure they go to data directory
+          if (assetInfo.name && assetInfo.name.endsWith('.json')) {
+            return 'data/[name][extname]';
+          }
+          return 'assets/[ext]/[name]-[hash].[ext]';
+        }
       }
     }
   },
@@ -91,20 +100,5 @@ export default defineConfig({
     }
   },
   // Ensure data files are copied to the dist directory
-  publicDir: 'public',
-  build: {
-    rollupOptions: {
-      input: {
-        main: resolve(__dirname, 'index.html'),
-      },
-      output: {
-        assetFileNames: (assetInfo) => {
-          if (assetInfo.name.endsWith('.json')) {
-            return 'data/[name][extname]';
-          }
-          return 'assets/[ext]/[name]-[hash].[ext]';
-        }
-      }
-    }
-  }
+  publicDir: 'public'
 }) 

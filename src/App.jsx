@@ -55,9 +55,12 @@ function App() {
     // Check if the data is available
     const checkDataAvailability = async () => {
       try {
-        // Create a proper URL that respects the base path
+        // Get the base URL for the current environment
         const basePath = import.meta.env.BASE_URL || '/';
-        const dataUrl = new URL('data/index.json', window.location.origin + basePath).href;
+        // Ensure basePath ends with a slash
+        const normalizedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`;
+        // Construct the full URL for the data file - fixed URL construction
+        const dataUrl = new URL('data/index.json', `${window.location.origin}${normalizedBasePath}`).href;
         
         console.log('Fetching data from:', dataUrl);
         const response = await fetch(dataUrl);
@@ -145,4 +148,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;
