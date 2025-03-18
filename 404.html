@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Page Not Found</title>
+  <script>
+    // SPA routing fix for GitHub Pages with custom domain
+    const l = window.location;
+    
+    // Check if we're on the custom domain
+    const isCustomDomain = l.hostname === 'stabgan.com' || l.hostname === 'www.stabgan.com';
+    const pathSegmentsToKeep = 1;
+    
+    let redirectPath;
+    if (isCustomDomain) {
+      // We're on the custom domain - check if we're in the icd10cm subdirectory
+      const pathParts = l.pathname.split('/');
+      if (pathParts[1] === 'icd10cm') {
+        // We're in the subdirectory, so keep the rest of the path
+        redirectPath = '/icd10cm/?p=/' + pathParts.slice(2).join('/');
+      } else {
+        // Not in the subdirectory, redirect isn't needed (but we'll handle anyway)
+        redirectPath = '/?p=/' + pathParts.slice(1).join('/');
+      }
+    } else {
+      // We're on the github.io domain - standard redirect
+      const pathParts = l.pathname.split('/');
+      const repo = pathParts[1]; // should be 'icd10cm'
+      redirectPath = '/' + repo + '/?p=/' + pathParts.slice(2).join('/');
+    }
+    
+    // Append query and hash if present
+    redirectPath += (l.search ? '&q=' + l.search.slice(1) : '') + (l.hash || '');
+    
+    // Store the path for redirect handling
+    sessionStorage.setItem('redirect', redirectPath);
+    
+    // Redirect
+    window.location.replace(l.protocol + '//' + l.hostname + redirectPath);
+  </script>
+</head>
+<body>
+  <h1>Page Not Found</h1>
+  <p>Redirecting to the homepage...</p>
+</body>
+</html> 
