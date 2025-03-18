@@ -1,100 +1,106 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { useTheme } from '../contexts/ThemeContext';
+
 function Footer() {
   const currentYear = new Date().getFullYear();
-
+  const { darkMode } = useTheme();
+  
   return (
-    <footer className="bg-gray-900 text-white py-12">
-      <div className="container mx-auto px-4">
-        <div className="grid md:grid-cols-2 gap-8">
-          <div>
-            <div className="flex items-center mb-4">
-              <svg 
-                className="w-8 h-8 mr-2 text-blue-500" 
-                xmlns="http://www.w3.org/2000/svg" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              >
-                <path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9"></path>
-                <polyline points="13 11 9 17 15 17 11 23"></polyline>
-              </svg>
-              <div>
-                <div className="text-xl font-bold">
-                  <span className="font-extrabold tracking-tight">ICD-10-CM</span>
-                  <span className="ml-1 font-light">Browser</span>
-                </div>
-              </div>
+    <footer className={`py-6 px-4 border-t ${
+      darkMode ? 'border-gray-800 bg-dark-surface text-gray-300' : 'border-gray-200 bg-white text-gray-800'
+    } transition-colors duration-300`}>
+      <div className="container mx-auto">
+        <div className="flex flex-col items-center">
+          {/* Dedication message with gradient */}
+          <div className="text-center mb-6 max-w-2xl mx-auto transform hover:scale-105 transition-transform duration-300">
+            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-1`}>Behold, the Creator:</p>
+            <div className="relative">
+              <p className="font-beast text-2xl md:text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-yellow-500 via-red-500 to-purple-600 animate-gradient-fire py-2 px-4 drop-shadow-glow tracking-wider">
+                CREATED BY MUSAFIR
+              </p>
+              <p className={`font-comic text-base md:text-lg font-bold italic mt-1 ${
+                darkMode ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                <span className="text-xl">🦁</span> Lord of the Night & King of All Animals
+              </p>
+              <div className="absolute -top-3 -right-3 text-2xl animate-bounce">👑</div>
             </div>
-            <p className="text-gray-400 mb-4 max-w-md">
-              A modern application for searching and exploring the International Classification 
-              of Diseases, 10th Revision, Clinical Modification (ICD-10-CM) codes.
-            </p>
           </div>
           
-          <div className="grid grid-cols-2 gap-8">
+          {/* Main footer content in 3 columns */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-y-6 gap-x-8 w-full max-w-4xl text-center md:text-left mb-6">
             <div>
-              <h3 className="text-lg font-semibold mb-3 text-blue-400">Resources</h3>
-              <ul className="space-y-2">
+              <h3 className={`font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-3`}>About</h3>
+              <ul className="space-y-2 text-sm">
                 <li>
-                  <a 
-                    href="https://www.cdc.gov/nchs/icd/icd10cm.htm" 
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-white transition"
-                  >
-                    CDC ICD-10-CM
+                  <a href="https://www.cms.gov/Medicare/Coding/ICD10" target="_blank" rel="noreferrer" className={`${
+                    darkMode ? 'text-gray-400 hover:text-blue-400' : 'text-gray-500 hover:text-blue-600'
+                  } transition-colors`}>
+                    Official ICD-10-CM Resources
                   </a>
                 </li>
                 <li>
-                  <a 
-                    href="https://www.who.int/standards/classifications/classification-of-diseases" 
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-white transition"
-                  >
+                  <a href="https://www.who.int/standards/classifications/classification-of-diseases" target="_blank" rel="noreferrer" className={`${
+                    darkMode ? 'text-gray-400 hover:text-blue-400' : 'text-gray-500 hover:text-blue-600'
+                  } transition-colors`}>
                     WHO Classification
                   </a>
                 </li>
               </ul>
             </div>
+            
             <div>
-              <h3 className="text-lg font-semibold mb-3 text-blue-400">Links</h3>
-              <ul className="space-y-2">
+              <h3 className={`font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-3`}>Resources</h3>
+              <ul className="space-y-2 text-sm">
                 <li>
-                  <a 
-                    href="https://github.com/stabgan/icd10cm" 
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-white transition"
-                  >
-                    GitHub Repository
+                  <a href="https://www.cdc.gov/nchs/icd/icd10cm.htm" target="_blank" rel="noreferrer" className={`${
+                    darkMode ? 'text-gray-400 hover:text-blue-400' : 'text-gray-500 hover:text-blue-600'
+                  } transition-colors`}>
+                    CDC ICD-10-CM
                   </a>
                 </li>
                 <li>
-                  <a 
-                    href="https://github.com/stabgan/icd10cm/issues" 
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-white transition"
-                  >
-                    Report Issues
+                  <a href="https://www.aapc.com/codes/icd-10-codes-range/" target="_blank" rel="noreferrer" className={`${
+                    darkMode ? 'text-gray-400 hover:text-blue-400' : 'text-gray-500 hover:text-blue-600'
+                  } transition-colors`}>
+                    AAPC Code Lookup
                   </a>
                 </li>
               </ul>
             </div>
+            
+            <div>
+              <h3 className={`font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-3`}>Legal</h3>
+              <ul className="space-y-2 text-sm">
+                <li>
+                  <Link to="/terms" className={`${
+                    darkMode ? 'text-gray-400 hover:text-blue-400' : 'text-gray-500 hover:text-blue-600'
+                  } transition-colors`}>
+                    Terms of Use
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/privacy" className={`${
+                    darkMode ? 'text-gray-400 hover:text-blue-400' : 'text-gray-500 hover:text-blue-600'
+                  } transition-colors`}>
+                    Privacy Policy
+                  </Link>
+                </li>
+              </ul>
+            </div>
           </div>
-        </div>
-        
-        <div className="mt-8 pt-8 border-t border-gray-800 text-center">
-          <p className="text-gray-500">
-            &copy; {currentYear} ICD-10-CM Browser. All rights reserved.
-          </p>
-          <p className="text-xs mt-2 text-gray-600">
-            This tool is provided for informational purposes only. 
-            Always consult official documentation for accurate coding information.
-          </p>
+          
+          {/* Copyright */}
+          <div className={`text-sm ${
+            darkMode ? 'text-gray-400 border-gray-800' : 'text-gray-500 border-gray-200'
+          } pt-4 border-t w-full text-center`}>
+            <p>© {currentYear} ICD-10-CM Browser. All rights reserved.</p>
+            <p className="text-xs mt-2">
+              ICD-10-CM is a registered trademark of the World Health Organization.
+              This application is for educational purposes only.
+            </p>
+          </div>
         </div>
       </div>
     </footer>

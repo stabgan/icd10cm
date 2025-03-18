@@ -26,11 +26,18 @@ lerna-debug.log*
 *.sln
 *.sw?
 
-# Ignore large data files
+# Ignore large data files but keep directory structure
 data/*.json
 data/*.jsonl
 data/*.csv
-public/data/
+!data/.gitkeep
+
+# Processed data files
+public/data/*
+!public/data/.gitkeep
+!public/data/chunks
+public/data/chunks/*
+!public/data/chunks/.gitkeep
 
 # Exceptions for example files
 !data/test_data.jsonl 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../contexts/ThemeContext';
 import Fuse from 'fuse.js';
 
 function Search({ onSearchResults }) {
@@ -11,13 +12,14 @@ function Search({ onSearchResults }) {
   const inputRef = useRef(null);
   const suggestionsRef = useRef(null);
   const navigate = useNavigate();
+  const { darkMode } = useTheme();
 
   // Load search index
   useEffect(() => {
     const loadSearchIndex = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/data/search-index.json');
+        const response = await fetch('./data/search-index.json');
         
         if (!response.ok) {
           throw new Error('Failed to load search index');
@@ -25,11 +27,25 @@ function Search({ onSearchResults }) {
         
         const data = await response.json();
         
-        // Create Fuse.js index
+        // Create Fuse.js index with improved configuration
         const fuse = new Fuse(data, {
-          keys: ['code', 'description', 'category'],
-          threshold: 0.3,
-          includeScore: true
+          // Perform search on these keys
+          keys: [
+            { name: 'code', weight: 2 }, // Give code higher weight
+            { name: 'description', weight: 1 }
+          ],
+          // More lenient threshold (0.6 instead of 0.3) to catch more matches
+          threshold: 0.6,
+          // Include the score so we can sort by relevance
+          includeScore: true,
+          // Use advanced search for better partial matching
+          useExtendedSearch: true,
+          // Allow fuzzy matching to catch typos and variations
+          ignoreLocation: true,
+          // Allow matches anywhere in the string
+          distance: 1000,
+          // More emphasis on finding something vs accuracy
+          findAllMatches: true
         });
         
         setSearchIndex(fuse);
@@ -72,11 +88,31 @@ function Search({ onSearchResults }) {
         return;
       }
       
-      const results = searchIndex.search(value);
+      let results;
+      
+      // For exact code search, try direct search first
+      if (/^[A-Z]\d+(\.\d+)?$/i.test(value)) {
+        // If it looks like a code, try finding exact matches first
+        results = searchIndex.search(`=${value}`);
+        
+        // If no exact match, fallback to fuzzy
+        if (results.length === 0) {
+          results = searchIndex.search(value);
+        }
+      } else {
+        // For regular text search
+        results = searchIndex.search(value);
+      }
+      
+      // Sort results by score (lower is better)
+      results.sort((a, b) => a.score - b.score);
+      
+      // Update suggestions (top 10)
       setSuggestions(results.slice(0, 10).map(result => result.item));
       
+      // Update search results (top 100)
       if (onSearchResults) {
-        onSearchResults(results.slice(0, 50).map(result => result.item));
+        onSearchResults(results.slice(0, 100).map(result => result.item));
       }
     },
     [searchIndex, onSearchResults]
@@ -102,7 +138,13 @@ function Search({ onSearchResults }) {
     <div className="w-full max-w-4xl mx-auto relative">
       <div className="relative">
         <div className={`relative rounded-xl transition-all duration-300 ${
-          focused ? 'ring-4 ring-blue-200 shadow-lg' : 'shadow'
+          focused 
+            ? darkMode
+              ? 'ring-4 ring-blue-700 shadow-lg shadow-blue-900/20'
+              : 'ring-4 ring-blue-200 shadow-lg'
+            : darkMode
+              ? 'shadow shadow-gray-900'
+              : 'shadow'
         }`}>
           <input
             ref={inputRef}
@@ -111,7 +153,11 @@ function Search({ onSearchResults }) {
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setFocused(true)}
             placeholder="Search for an ICD-10-CM code or description..."
-            className="w-full p-5 pr-16 text-lg rounded-xl border-0 outline-none focus:ring-0 bg-white"
+            className={`w-full p-5 pr-16 text-lg rounded-xl border-0 outline-none focus:ring-0 ${
+              darkMode 
+                ? 'bg-dark-surface text-gray-200 placeholder-gray-500'
+                : 'bg-white text-gray-800 placeholder-gray-400'
+            }`}
             disabled={loading}
             aria-label="Search"
           />
@@ -119,7 +165,9 @@ function Search({ onSearchResults }) {
           <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex">
             {query.length > 0 && (
               <button 
-                className="mr-2 text-gray-400 hover:text-gray-600 transition"
+                className={`mr-2 ${
+                  darkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                } transition`}
                 onClick={() => setQuery('')}
                 aria-label="Clear search"
               >
@@ -130,14 +178,14 @@ function Search({ onSearchResults }) {
             )}
             
             {loading ? (
-              <div className="animate-spin text-blue-500">
+              <div className={`animate-spin ${darkMode ? 'text-blue-400' : 'text-blue-500'}`}>
                 <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
               </div>
             ) : (
-              <div className="text-blue-500">
+              <div className={darkMode ? 'text-blue-400' : 'text-blue-500'}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
@@ -150,28 +198,41 @@ function Search({ onSearchResults }) {
       {suggestions.length > 0 && (
         <div 
           ref={suggestionsRef}
-          className="absolute z-10 w-full mt-2 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden"
+          className={`absolute z-10 w-full mt-2 ${
+            darkMode 
+              ? 'bg-dark-surface rounded-xl shadow-lg shadow-black/50 border border-gray-800'
+              : 'bg-white rounded-xl shadow-lg border border-gray-200'
+          } overflow-hidden`}
           style={{ maxHeight: '380px', overflowY: 'auto' }}
         >
           <ul>
             {suggestions.map((item) => (
               <li 
                 key={item.code} 
-                className="transition hover:bg-blue-50 cursor-pointer"
+                className={`transition ${
+                  darkMode 
+                    ? 'hover:bg-gray-800/50 cursor-pointer'
+                    : 'hover:bg-blue-50 cursor-pointer'
+                }`}
                 onClick={() => handleSelectItem(item.code)}
               >
-                <div className="p-4 border-b last:border-b-0 border-gray-100">
+                <div className={`p-4 border-b last:border-b-0 ${
+                  darkMode ? 'border-gray-800' : 'border-gray-100'
+                }`}>
                   <div className="flex justify-between">
                     <div className="flex items-center">
-                      <span className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded-md">
+                      <span className={`${
+                        darkMode 
+                          ? 'bg-blue-900/50 text-blue-300'
+                          : 'bg-blue-100 text-blue-800'
+                      } text-sm font-medium px-2.5 py-0.5 rounded-md`}>
                         {item.code}
-                      </span>
-                      <span className="text-xs font-medium bg-gray-100 text-gray-700 ml-2 px-2 py-0.5 rounded-md">
-                        {item.category}
                       </span>
                     </div>
                   </div>
-                  <p className="text-sm mt-1 text-gray-700">{item.description}</p>
+                  <p className={`text-sm mt-1 ${
+                    darkMode ? 'text-gray-400' : 'text-gray-700'
+                  }`}>{item.description}</p>
                 </div>
               </li>
             ))}
