@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main  # Set this to your default branch
+  # Allow manual trigger
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,18 +16,45 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for proper Git info
 
-      - name: Set up Node.js
+      - name: Setup Node.js environment
         uses: actions/setup-node@v3
         with:
           node-version: 18
           cache: 'npm'
 
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            **/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
       - name: Install dependencies
-        run: npm ci
+        run: |
+          echo "Installing dependencies..."
+          npm ci
+          # Install terser explicitly since it's an optional dependency for Vite
+          npm install terser --save-dev
+        
+      - name: Check build dependencies
+        run: |
+          echo "Checking for terser..."
+          if [ -d "node_modules/terser" ]; then
+            echo "✅ Terser is installed"
+          else
+            echo "❌ Terser is not installed"
+            npm install terser --save-dev
+          fi
 
       - name: Build
         run: |
+          echo "Building application..."
           # Set Node options to fix crypto.getRandomValues error
           export NODE_OPTIONS="--no-warnings --experimental-global-webcrypto"
           npm run build
@@ -33,11 +62,35 @@ jobs:
           # Add polyfill for crypto.getRandomValues
           NODE_ENV: production
 
-      - name: Add .nojekyll file
-        run: touch ./dist/.nojekyll
+      - name: Prepare for deployment
+        run: |
+          echo "Preparing files for deployment..."
+          # Create .nojekyll file to disable Jekyll processing
+          touch ./dist/.nojekyll
+          # Copy 404.html to the dist folder if it exists in public
+          if [ -f "public/404.html" ]; then
+            cp public/404.html ./dist/
+          fi
+          # Ensure CNAME file is present
+          if [ -f "public/CNAME" ]; then
+            cp public/CNAME ./dist/
+          fi
+          # Check if build was successful
+          if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
+            echo "❌ Build failed - dist directory or index.html not found"
+            exit 1
+          fi
+          echo "✅ Build successful! Ready for deployment."
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: dist
-          branch: gh-pages 
+          branch: gh-pages
+          clean: true  # Clean up old files
+          commit-message: "Deploy: ${{ github.event.head_commit.message }}"
+
+      - name: Verify deployment
+        run: |
+          echo "Deployment completed to gh-pages branch."
+          echo "Your site should be available at: https://stabgan.com/icd10cm/" 
