@@ -1,17 +1,23 @@
 import { openDB } from 'idb';
+import { flexSearchAdapter } from './flexSearchAdapter';
 
 // Database configuration
 const DB_NAME = 'icd10cm-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Updated version to handle schema changes
 const CODES_STORE = 'codes';
 const CHUNKS_STORE = 'chunks';
 const INDEX_STORE = 'index';
 const SEARCH_INDEX_STORE = 'search-index';
+const FLEX_INDEX_STORE = 'flex-index'; // New store for FlexSearch serialized index
+
+// Hold in-memory indices for faster searches
+let searchIndices = null;
+let documentsMap = null;
 
 // Initialize the database
 async function initializeDB() {
   return openDB(DB_NAME, DB_VERSION, {
-    upgrade(db) {
+    upgrade(db, oldVersion, newVersion) {
       // Create object stores if they don't exist
       if (!db.objectStoreNames.contains(CODES_STORE)) {
         db.createObjectStore(CODES_STORE, { keyPath: 'code' });
@@ -27,6 +33,11 @@ async function initializeDB() {
       
       if (!db.objectStoreNames.contains(SEARCH_INDEX_STORE)) {
         db.createObjectStore(SEARCH_INDEX_STORE, { keyPath: 'id' });
+      }
+      
+      // Add FlexSearch index store
+      if (!db.objectStoreNames.contains(FLEX_INDEX_STORE)) {
+        db.createObjectStore(FLEX_INDEX_STORE, { keyPath: 'id' });
       }
     }
   });
@@ -108,6 +119,60 @@ function buildSearchIndex(codes) {
   return searchIndex;
 }
 
+// Initialize FlexSearch indices
+async function initializeSearchIndices() {
+  if (searchIndices) {
+    return { searchIndices, documentsMap };
+  }
+  
+  try {
+    const db = await initializeDB();
+    
+    // Try to load serialized indices from database
+    const flexIndexTx = db.transaction(FLEX_INDEX_STORE, 'readonly');
+    const flexIndexStore = flexIndexTx.objectStore(FLEX_INDEX_STORE);
+    const indexData = await flexIndexStore.get('serialized');
+    
+    if (indexData && indexData.documentCount > 0) {
+      // Create new indices
+      searchIndices = flexSearchAdapter.createIndices();
+      
+      // Load documents for the document map
+      const chunksTx = db.transaction(CHUNKS_STORE, 'readonly');
+      const chunksStore = chunksTx.objectStore(CHUNKS_STORE);
+      const allChunks = await chunksStore.getAll();
+      
+      // Build documents array
+      const allCodes = [];
+      for (const chunk of allChunks) {
+        allCodes.push(...chunk.codes);
+      }
+      
+      // Create document map for faster lookup
+      documentsMap = flexSearchAdapter.createDocumentsMap(allCodes);
+      
+      // Load serialized indices if available
+      if (indexData.serialized) {
+        // Import serialized data (in a real implementation)
+        // This is a placeholder as FlexSearch doesn't support direct serialization
+        console.log(`Loaded search indices with ${indexData.documentCount} documents`);
+      } else {
+        // Index all documents if serialized data isn't available
+        console.log('Rebuilding search indices');
+        await flexSearchAdapter.indexBatch(searchIndices, allCodes);
+      }
+      
+      return { searchIndices, documentsMap };
+    }
+    
+    // If we get here, indices weren't loaded
+    return { searchIndices: null, documentsMap: null };
+  } catch (error) {
+    console.error('Error initializing search indices:', error);
+    return { searchIndices: null, documentsMap: null };
+  }
+}
+
 // Main processing function
 export async function processICD10Data(file, progressCallback) {
   const startTime = performance.now();
@@ -115,14 +180,15 @@ export async function processICD10Data(file, progressCallback) {
   
   // Clear existing data
   const tx = db.transaction(
-    [CODES_STORE, CHUNKS_STORE, INDEX_STORE, SEARCH_INDEX_STORE], 
+    [CODES_STORE, CHUNKS_STORE, INDEX_STORE, SEARCH_INDEX_STORE, FLEX_INDEX_STORE], 
     'readwrite'
   );
   await Promise.all([
     tx.objectStore(CODES_STORE).clear(),
     tx.objectStore(CHUNKS_STORE).clear(),
     tx.objectStore(INDEX_STORE).clear(),
-    tx.objectStore(SEARCH_INDEX_STORE).clear()
+    tx.objectStore(SEARCH_INDEX_STORE).clear(),
+    tx.objectStore(FLEX_INDEX_STORE).clear()
   ]);
   
   // Process data
@@ -161,8 +227,22 @@ export async function processICD10Data(file, progressCallback) {
   // Update progress to 70%
   progressCallback(70);
   
-  // Build search index
+  // Build search index (traditional)
   const searchIndex = buildSearchIndex(allCodes);
+  
+  // Update progress to 75%
+  progressCallback(75);
+  
+  // Create FlexSearch indices
+  const indices = flexSearchAdapter.createIndices();
+  const documentsMap = flexSearchAdapter.createDocumentsMap(allCodes);
+  
+  // Index all documents with FlexSearch
+  await flexSearchAdapter.indexBatch(indices, allCodes);
+  
+  // Store references to in-memory indices
+  searchIndices = indices;
+  this.documentsMap = documentsMap;
   
   // Update progress to 80%
   progressCallback(80);
@@ -176,6 +256,20 @@ export async function processICD10Data(file, progressCallback) {
   });
   
   await Promise.all(chunkPromises);
+  
+  // Update progress to 85%
+  progressCallback(85);
+  
+  // Save FlexSearch index metadata
+  const flexIndexTransaction = db.transaction(FLEX_INDEX_STORE, 'readwrite');
+  await flexIndexTransaction.objectStore(FLEX_INDEX_STORE).put({
+    id: 'serialized',
+    documentCount: allCodes.length,
+    // Serialized data would go here if FlexSearch supported direct serialization
+    // This is just a placeholder to track that we've indexed the data
+    serialized: false,
+    date: new Date().toISOString()
+  });
   
   // Update progress to 90%
   progressCallback(90);
@@ -224,10 +318,15 @@ export async function checkDataLoaded() {
     if (!dataLoaded) return false;
     
     // Verify the database exists and has data
-    const db = await openDB(DB_NAME, DB_VERSION);
+    const db = await initializeDB();
     const tx = db.transaction(INDEX_STORE, 'readonly');
     const indexStore = tx.objectStore(INDEX_STORE);
     const indexData = await indexStore.get('main');
+    
+    // Initialize search indices
+    if (indexData && indexData.totalCodes > 0) {
+      await initializeSearchIndices();
+    }
     
     return !!indexData && indexData.totalCodes > 0;
   } catch (error) {
@@ -239,7 +338,7 @@ export async function checkDataLoaded() {
 // Get index data
 export async function getIndexData() {
   try {
-    const db = await openDB(DB_NAME, DB_VERSION);
+    const db = await initializeDB();
     const tx = db.transaction(INDEX_STORE, 'readonly');
     const indexStore = tx.objectStore(INDEX_STORE);
     return await indexStore.get('main');
@@ -249,10 +348,10 @@ export async function getIndexData() {
   }
 }
 
-// Get codes for a letter
+// Get codes for a specific letter
 export async function getCodesForLetter(letter) {
   try {
-    const db = await openDB(DB_NAME, DB_VERSION);
+    const db = await initializeDB();
     const tx = db.transaction(CHUNKS_STORE, 'readonly');
     const chunksStore = tx.objectStore(CHUNKS_STORE);
     const chunk = await chunksStore.get(letter);
@@ -266,145 +365,187 @@ export async function getCodesForLetter(letter) {
 // Get a specific code
 export async function getCode(code) {
   try {
-    // Get the first letter of the code
+    const db = await initializeDB();
+    
+    // First try the exact code
+    const codeTx = db.transaction(CODES_STORE, 'readonly');
+    const codeStore = codeTx.objectStore(CODES_STORE);
+    const codeData = await codeStore.get(code);
+    
+    if (codeData) {
+      return codeData;
+    }
+    
+    // If not found in CODES_STORE, search in chunks
     const letter = code.charAt(0);
+    const chunkTx = db.transaction(CHUNKS_STORE, 'readonly');
+    const chunksStore = chunkTx.objectStore(CHUNKS_STORE);
+    const chunk = await chunksStore.get(letter);
     
-    // Get all codes for that letter
-    const codes = await getCodesForLetter(letter);
+    if (chunk) {
+      return chunk.codes.find(c => c.code === code) || null;
+    }
     
-    // Find the specific code
-    return codes.find(c => c.code === code) || null;
+    return null;
   } catch (error) {
     console.error(`Error getting code ${code}:`, error);
     return null;
   }
 }
 
-// Search codes
+// Search for codes
 export async function searchCodes(query) {
-  if (!query || query.length < 2) return [];
+  if (!query || query.trim() === '') {
+    return [];
+  }
   
   try {
-    const db = await openDB(DB_NAME, DB_VERSION);
-    const tx = db.transaction([SEARCH_INDEX_STORE, CHUNKS_STORE], 'readonly');
-    const searchStore = tx.objectStore(SEARCH_INDEX_STORE);
-    const chunksStore = tx.objectStore(CHUNKS_STORE);
-    const searchIndex = await searchStore.get('main');
+    // First initialize the search indices if they aren't loaded
+    let indices = searchIndices;
+    let docMap = documentsMap;
     
-    if (!searchIndex || !searchIndex.data) {
-      console.log('No search index found - attempting direct search');
-      return await directCodeSearch(query, chunksStore);
-    }
-    
-    const results = new Map();
-    const searchTerms = query.toLowerCase().split(/\s+/);
-    
-    // Search for exact code match first (highest priority)
-    const upperQuery = query.toUpperCase();
-    if (upperQuery.match(/^[A-Z][0-9]+(\.[0-9]+)?$/)) {
-      // This looks like a code - do direct search
-      const codeLetter = upperQuery.charAt(0);
-      const chunk = await chunksStore.get(codeLetter);
+    if (!indices) {
+      const result = await initializeSearchIndices();
+      indices = result.searchIndices;
+      docMap = result.documentsMap;
       
-      if (chunk && chunk.codes) {
-        const exactMatches = chunk.codes.filter(item => 
-          item.code.startsWith(upperQuery)
-        );
-        
-        exactMatches.forEach(item => {
-          results.set(item.code, item);
-        });
-        
-        // If we found exact matches by code, return them immediately
-        if (results.size > 0) {
-          return Array.from(results.values());
-        }
+      // If we still don't have indices, fall back to traditional search
+      if (!indices) {
+        console.log('FlexSearch indices not available, falling back to traditional search');
+        return fallbackSearch(query);
       }
     }
     
-    // Look for exact matches in search index
-    const indexKeys = Object.keys(searchIndex.data);
+    // Use FlexSearch
+    console.log('Using FlexSearch for query:', query);
+    const results = await flexSearchAdapter.search(indices, docMap, query);
     
-    // First try exact matches on full query
-    indexKeys.forEach(key => {
-      if (key.toLowerCase().includes(query.toLowerCase())) {
-        const matches = searchIndex.data[key];
-        if (Array.isArray(matches)) {
-          matches.forEach(item => {
-            results.set(item.code, item);
-          });
-        } else if (matches) {
-          results.set(matches.code, matches);
-        }
-      }
-    });
-    
-    // Then search for each term
-    for (const term of searchTerms) {
-      if (term.length < 2) continue;
-      
-      indexKeys.forEach(key => {
-        if (key.toLowerCase().includes(term.toLowerCase())) {
-          const matches = searchIndex.data[key];
-          if (Array.isArray(matches)) {
-            matches.forEach(item => {
-              results.set(item.code, item);
-            });
-          } else if (matches) {
-            results.set(matches.code, matches);
-          }
-        }
-      });
-    }
-    
-    // If no results found from index, try direct search
-    if (results.size === 0) {
-      console.log('No results found in index - attempting direct search');
-      const directResults = await directCodeSearch(query, chunksStore);
-      directResults.forEach(item => {
-        results.set(item.code, item);
-      });
-    }
-    
-    return Array.from(results.values());
+    return results;
   } catch (error) {
     console.error('Error searching codes:', error);
-    return [];
+    
+    // Fall back to traditional search on error
+    console.log('Error with FlexSearch, falling back to traditional search');
+    return fallbackSearch(query);
   }
 }
 
-// Perform a direct search on all codes
-async function directCodeSearch(query, storeOrTx) {
-  const results = [];
-  const lowerQuery = query.toLowerCase();
+// Traditional fallback search
+async function fallbackSearch(query) {
+  try {
+    // Normalize query
+    const normalizedQuery = query.trim().toLowerCase();
+    
+    // Try exact match first
+    const exactCode = await getCode(query.toUpperCase());
+    if (exactCode) {
+      return [exactCode];
+    }
+    
+    // Then try search index
+    const db = await initializeDB();
+    const indexTx = db.transaction(SEARCH_INDEX_STORE, 'readonly');
+    const indexStore = indexTx.objectStore(SEARCH_INDEX_STORE);
+    const indexData = await indexStore.get('main');
+    
+    if (!indexData || !indexData.data) {
+      console.warn('Search index not found, falling back to direct search');
+      return directCodeSearch(normalizedQuery);
+    }
+    
+    // Search in index
+    const results = [];
+    
+    // First add exact word matches
+    if (indexData.data[normalizedQuery]) {
+      const matches = indexData.data[normalizedQuery];
+      if (Array.isArray(matches)) {
+        results.push(...matches);
+      } else if (matches) {
+        results.push(matches);
+      }
+    }
+    
+    // Then add partial matches
+    const searchWords = normalizedQuery.split(/\s+/);
+    for (const word of searchWords) {
+      if (word.length >= 3) {
+        Object.keys(indexData.data).forEach(key => {
+          if (key.includes(word) && key !== normalizedQuery) {
+            const matches = indexData.data[key];
+            if (Array.isArray(matches)) {
+              results.push(...matches);
+            } else if (matches) {
+              results.push(matches);
+            }
+          }
+        });
+      }
+    }
+    
+    // Deduplicate results
+    const seen = new Set();
+    const uniqueResults = [];
+    
+    for (const result of results) {
+      if (!seen.has(result.code)) {
+        seen.add(result.code);
+        uniqueResults.push(result);
+      }
+    }
+    
+    return uniqueResults.slice(0, 100); // Limit to 100 results
+    
+  } catch (error) {
+    console.error('Error in fallback search:', error);
+    return directCodeSearch(query.toLowerCase());
+  }
+}
+
+// Direct code search (most basic fallback)
+async function directCodeSearch(query) {
+  console.log('Using direct search for:', query);
   
   try {
-    let chunksStore = storeOrTx;
-    if (!chunksStore.get) {
-      // If we were passed a transaction, get the store
-      chunksStore = storeOrTx.objectStore(CHUNKS_STORE);
-    }
+    const db = await initializeDB();
+    const tx = db.transaction(CHUNKS_STORE, 'readonly');
+    const chunksStore = tx.objectStore(CHUNKS_STORE);
     
-    // Get all letters (A-Z)
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    const results = [];
+    const cursor = await chunksStore.openCursor();
     
-    for (const letter of letters) {
-      const chunk = await chunksStore.get(letter);
-      if (!chunk || !chunk.codes) continue;
-      
-      // Search codes in this chunk
-      const matchingCodes = chunk.codes.filter(code => 
-        code.code.toLowerCase().includes(lowerQuery) || 
-        code.description.toLowerCase().includes(lowerQuery)
-      );
-      
-      results.push(...matchingCodes);
-      
-      // Limit to prevent too many results
-      if (results.length > 200) break;
-    }
+    // Limit the number of results
+    const limit = 100;
     
-    return results.slice(0, 100); // Return at most 100 results
+    // Search through all chunks
+    const searchAllChunks = async (cursor) => {
+      if (!cursor || results.length >= limit) {
+        return results;
+      }
+      
+      const chunk = cursor.value;
+      
+      // Search this chunk for matching codes
+      for (const code of chunk.codes) {
+        if (results.length >= limit) {
+          break;
+        }
+        
+        if (
+          code.code.toLowerCase().includes(query) ||
+          code.description.toLowerCase().includes(query)
+        ) {
+          results.push(code);
+        }
+      }
+      
+      // Move to next chunk
+      return searchAllChunks(await cursor.continue());
+    };
+    
+    await searchAllChunks(cursor);
+    return results;
+    
   } catch (error) {
     console.error('Error in direct search:', error);
     return [];

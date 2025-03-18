@@ -18,16 +18,17 @@ try {
 // https://vitejs.dev/config/
 export default defineConfig(async ({ command, mode }) => {
   const pkg = await readPackageJSON()
+  const isElectron = mode === 'electron'
   
   return {
-    base: '/',
+    base: isElectron ? './' : '/',
     plugins: [
       react(),
       nodePolyfills(),
     ],
     server: {
-      port: 5173,
-      strictPort: false,
+      port: 3000, // Changed to match electron:start script
+      strictPort: true, // Force specific port for Electron
     },
     build: {
       outDir: 'dist',
@@ -61,11 +62,13 @@ export default defineConfig(async ({ command, mode }) => {
     },
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
-      __BASE_PATH__: JSON.stringify('/'),
+      __BASE_PATH__: JSON.stringify(isElectron ? './' : '/'),
       // Fix for crypto.getRandomValues in Node.js environment
       'process.env': {},
       // Ensure global and window are defined
       global: 'globalThis',
+      // Indicate if we're running in Electron
+      __IS_ELECTRON__: isElectron,
     },
     // Handle crypto for build
     optimizeDeps: {
@@ -78,8 +81,8 @@ export default defineConfig(async ({ command, mode }) => {
     // Ensure data files are copied to the dist directory
     publicDir: 'public',
     preview: {
-      port: 5173,
-      strictPort: false,
+      port: 3000,
+      strictPort: true,
     },
     test: {
       globals: true,

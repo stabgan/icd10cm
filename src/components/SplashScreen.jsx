@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { processICD10Data } from '../utils/dataProcessor';
@@ -7,12 +7,18 @@ function SplashScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
+  const [isElectron, setIsElectron] = useState(false);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { darkMode } = useTheme();
 
-  const handleFileSelect = async (e) => {
-    const file = e.target.files[0];
+  // Check if running in Electron
+  useEffect(() => {
+    // Check if Electron API is available
+    setIsElectron(typeof window !== 'undefined' && window.electronAPI !== undefined);
+  }, []);
+
+  const processFile = async (file) => {
     if (!file) return;
     
     if (!file.name.endsWith('.jsonl') && !file.name.endsWith('.json')) {
@@ -44,8 +50,66 @@ function SplashScreen() {
     }
   };
 
+  const handleFileSelect = async (e) => {
+    const file = e.target.files[0];
+    await processFile(file);
+  };
+
+  const handleElectronFileSelect = async () => {
+    try {
+      // Use Electron's file dialog
+      const filePath = await window.electronAPI.openFile();
+      
+      if (!filePath) return; // User canceled the dialog
+      
+      // Get file stats
+      const fileStats = await window.electronAPI.getFileStats(filePath);
+      
+      // Create a File object from the filePath
+      const fileName = filePath.split(/[\\/]/).pop();
+      const fileType = fileName.endsWith('.jsonl') ? 'application/jsonl' : 'application/json';
+      
+      // Create a custom File-like object that works with our existing processing logic
+      const fileObject = {
+        name: fileName,
+        size: fileStats.size,
+        type: fileType,
+        path: filePath,
+        // Override slice method to use Electron IPC for file reading
+        slice: async (start, end) => {
+          const chunkText = await window.electronAPI.readFileChunk({ 
+            filePath, 
+            start, 
+            end: end - 1 // end is inclusive in Node.js API
+          });
+          
+          // Return a Blob that can be converted to text
+          return new Blob([chunkText], { type: fileType });
+        },
+        // Add text method to mimic File interface
+        text: async function() {
+          return window.electronAPI.readFileChunk({ 
+            filePath, 
+            start: 0, 
+            end: this.size - 1 
+          });
+        }
+      };
+      
+      await processFile(fileObject);
+      
+    } catch (err) {
+      console.error('Error selecting file:', err);
+      setError(`Error selecting file: ${err.message}`);
+    }
+  };
+
   const triggerFileUpload = () => {
-    fileInputRef.current.click();
+    if (isElectron) {
+      handleElectronFileSelect();
+    } else {
+      fileInputRef.current.click();
+    }
   };
 
   return (
@@ -83,7 +147,7 @@ function SplashScreen() {
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
-            Upload Data File
+            {isElectron ? "Select Data File" : "Upload Data File"}
           </button>
         ) : (
           <div className="w-full">
@@ -110,13 +174,19 @@ function SplashScreen() {
         <h2 className="font-semibold mb-2">Instructions:</h2>
         <ol className="list-decimal pl-5 space-y-1">
           <li>Obtain the ICD-10-CM data file from your administrator</li>
-          <li>Click the "Upload Data File" button above to select your file</li>
+          <li>Click the {isElectron ? '"Select Data File"' : '"Upload Data File"'} button above to select your file</li>
           <li>Wait for the data to be processed (this may take a few minutes)</li>
           <li>Once complete, you'll be redirected to the ICD-10 browser automatically</li>
         </ol>
         <div className="mt-4 p-3 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200">
-          <p><strong>Note:</strong> Data is stored locally in your browser and never uploaded to any server.</p>
+          <p><strong>Note:</strong> {isElectron ? 'All data is processed locally and never uploaded to any server.' : 'Data is stored locally in your browser and never uploaded to any server.'}</p>
         </div>
+
+        {isElectron && (
+          <div className="mt-4 p-3 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
+            <p><strong>Desktop App:</strong> You're using the desktop version of ICD-10-CM Browser.</p>
+          </div>
+        )}
       </div>
     </div>
   );

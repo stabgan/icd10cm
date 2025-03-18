@@ -1,8 +1,9 @@
 {
-  "name": "icd10cm",
+  "name": "icd10cm-desktop",
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -15,7 +16,11 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "electron:dev": "concurrently -k \"npm run dev\" \"npm run electron:start\"",
+    "electron:start": "wait-on tcp:3000 && electron .",
+    "electron:build": "npm run build && electron-builder build --win --x64",
+    "electron:pack": "electron-builder --dir"
   },
   "dependencies": {
     "file-saver": "^2.0.5",
@@ -26,7 +31,10 @@
     "react-dom": "^18.2.0",
     "react-markdown": "^9.0.1",
     "react-router-dom": "^6.21.1",
-    "react-syntax-highlighter": "^15.6.1"
+    "react-syntax-highlighter": "^15.6.1",
+    "electron-serve": "^1.1.0",
+    "electron-store": "^8.1.0",
+    "flexsearch": "^0.7.31"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.1",
@@ -37,6 +45,9 @@
     "@types/react-dom": "^18.2.7",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "electron": "^30.1.0",
+    "electron-builder": "^24.9.1",
     "eslint": "^8.45.0",
     "eslint-plugin-react": "^7.32.2",
     "eslint-plugin-react-hooks": "^4.6.0",
@@ -48,6 +59,25 @@
     "tailwindcss": "^3.4.0",
     "vite": "^5.0.10",
     "vite-plugin-node-polyfills": "^0.23.0",
-    "vitest": "^3.0.9"
+    "vitest": "^3.0.9",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.yourdomain.icd10cm",
+    "productName": "ICD-10-CM Browser",
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "directories": {
+      "buildResources": "public",
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/icon.ico"
+    }
   }
 }
