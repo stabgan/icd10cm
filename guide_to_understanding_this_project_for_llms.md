@@ -16,10 +16,11 @@ The ICD-10-CM Browser is a full-stack application that allows users to search an
 - Provide a responsive UI that works across all device sizes
 - Support dark/light mode theming based on user preference
 - Display detailed code information with proper formatting
-- Available as both web application and Electron desktop app
 - Feature alphabetical browsing of codes via sidebar
 - Allow database reset and reload functionality
 - Operate with MongoDB backend for robust data management
+- Download code details as PDF format
+- 50/50 split layout for optimal browsing and viewing experience
 
 ## Architecture Overview
 
@@ -30,18 +31,22 @@ The application follows a modern full-stack architecture with these key componen
 /
 ├── server.js            - Express server with MongoDB integration
 ├── start.js             - Helper script to start everything together
-├── electron/            - Electron app configuration files
-│   ├── main.cjs         - Main Electron process
-│   └── preload.js       - Preload script for secure IPC
+├── check-mongodb.js     - Script to verify MongoDB connection before startup
 ├── src/                 - React frontend application
 │   ├── components/      - UI components
-│   │   └── CodeSidebar.jsx - Alphabetical code browser sidebar
+│   │   ├── CodeSidebar.jsx - Alphabetical code browser sidebar
+│   │   ├── Search.jsx      - Search component with real-time results
+│   │   ├── Header.jsx      - Application header with theme toggle
+│   │   ├── Footer.jsx      - Application footer
+│   │   └── SplashScreen.jsx - Initial data upload interface
 │   ├── contexts/        - React context providers
+│   │   └── ThemeContext.jsx - Dark/light mode management
 │   ├── pages/           - Page components
+│   │   ├── HomePage.jsx      - Main search interface
+│   │   └── CodeDetailPage.jsx - Detailed code view
 │   └── utils/           - Utility functions including API service
-├── scripts/             - Build and utility scripts
-│   └── build-windows.cjs - Windows-specific build script
-└── build/               - Build assets and icons
+├── tailwind.config.js   - Tailwind CSS configuration with custom theme
+└── vite.config.js       - Vite bundler configuration
 ```
 
 ### Core Components
@@ -51,20 +56,18 @@ The application follows a modern full-stack architecture with these key componen
 2. **MongoDB Integration** - Stores and indexes ICD-10-CM codes
 3. **File Processing** - Parses and indexes JSONL data files
 4. **Search API** - Provides efficient multi-tiered search capabilities
+5. **MongoDB Health Check** - Verifies database connectivity before startup
 
 #### Frontend
-1. `App.jsx` - Main application component with routing
-2. `HomePage` - Primary interface with search functionality
-3. `CodeDetailPage` - Displays detailed code information
-4. `CodeSidebar` - Alphabetical navigation of codes
-5. `SplashScreen` - Handles file upload and initial data setup
-6. `Search` - Provides search interface with real-time results
-7. `ThemeContext` - Manages dark/light mode preferences
-
-#### Desktop App
-1. `electron/main.cjs` - Main Electron process managing app lifecycle
-2. `electron/preload.js` - Secure bridge between renderer and main processes
-3. `forge.config.js` - Electron Forge configuration for packaging
+1. `App.jsx` - Main application component with routing and 50/50 layout
+2. `HomePage.jsx` - Primary interface with search functionality
+3. `CodeDetailPage.jsx` - Displays detailed code information
+4. `CodeSidebar.jsx` - Alphabetical navigation of codes in the left 50% panel
+5. `SplashScreen.jsx` - Handles file upload and initial data setup
+6. `Search.jsx` - Provides search interface with real-time results
+7. `ThemeContext.jsx` - Manages dark/light mode preferences with system detection
+8. `Header.jsx` - Application header with navigation and theme controls
+9. `Footer.jsx` - Application footer with attribution information
 
 ## Data Flow
 
@@ -74,7 +77,7 @@ The application's data flow follows this pattern:
    - Express server connects to MongoDB
    - Frontend checks if data is available in MongoDB
    - If no data, show SplashScreen for data upload
-   - If data exists, show main interface
+   - If data exists, show main interface with 50/50 split layout
 
 2. **Data Import Process**:
    - User uploads JSONL file via SplashScreen
@@ -83,6 +86,7 @@ The application's data flow follows this pattern:
    - Each chunk is parsed and stored in MongoDB collections
    - Indexes are created for efficient searching
    - UI is refreshed to show search interface
+   - Progress is reported in real-time via EventSource
 
 3. **Search Flow**:
    - User enters query in Search component
@@ -94,25 +98,28 @@ The application's data flow follows this pattern:
    - Results are returned to frontend
    - Results are displayed in search results grid
 
-4. **Detail View Flow**:
-   - User selects code from search results
+4. **Sidebar Navigation Flow**:
+   - User interacts with alphabet buttons in the left sidebar
+   - Selected letter triggers API request for codes starting with that letter
+   - Codes are displayed in the left panel
+   - User can scroll through codes and select one for detailed view
+   - Selected code is highlighted for better visibility
+
+5. **Detail View Flow**:
+   - User selects code from search results or sidebar
    - App navigates to CodeDetailPage route
    - Code data is fetched from server by ID
-   - Detailed information is displayed with proper formatting
+   - Detailed information is displayed in right 50% panel
+   - PDF download option is available for exporting code details
 
-5. **Reset Database Flow**:
+6. **Reset Database Flow**:
    - User clicks "Reset Database" button
    - Confirmation dialog is displayed
    - Request is sent to reset-database endpoint
    - Server clears MongoDB collections
    - Server reloads data from last uploaded file
    - UI is refreshed to show updated data
-
-6. **Alphabetical Browsing Flow**:
-   - Sidebar shows letters with available codes
-   - User selects a letter to see all codes starting with that letter
-   - Codes are fetched from server by letter prefix
-   - User can select code to view details
+   - Success/failure messages are shown to the user
 
 ## Database Structure
 
@@ -273,7 +280,7 @@ The server handles data processing through these key operations:
        .project({
          code: 1,
          description: 1,
-         detail_context: 1,
+         detailed_context: 1,
          score: { $meta: "textScore" }
        })
        .sort({ score: { $meta: "textScore" } })
@@ -295,83 +302,113 @@ The server handles data processing through these key operations:
 
 ### Frontend Components
 
+**App.jsx**:
+```jsx
+function App() {
+  // ...state definitions...
+
+  return (
+    <Router>
+      <div className={`min-h-screen flex flex-col ${
+        darkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'
+      } transition-colors duration-300`}>
+        <Header />
+        
+        {/* Main container with 50/50 split */}
+        <div className="flex flex-row w-full h-[calc(100vh-64px)] pt-16">
+          {/* Left sidebar - exactly 50% width */}
+          {dataStatus.loaded && !dataStatus.error && (
+            <div className="w-1/2 h-full overflow-auto border-r border-gray-200 dark:border-gray-700">
+              <CodeSidebar />
+            </div>
+          )}
+          
+          {/* Main content area - exactly 50% width */}
+          <main className={`${
+            dataStatus.loaded && !dataStatus.error ? 'w-1/2' : 'w-full'
+          } h-full overflow-auto p-6`}>
+            <Routes>
+              <Route path="/" element={<HomePage dataStatus={dataStatus} onToggleCreator={toggleCreatorCredit} />} />
+              <Route path="/code/:codeId" element={<CodeDetailPage />} />
+              {/* ...other routes... */}
+            </Routes>
+          </main>
+        </div>
+        
+        <Footer showCreator={showCreator} />
+      </div>
+    </Router>
+  );
+}
+```
+
 **HomePage Component**:
 - Provides main search interface
 - Displays search results
 - Contains reset database functionality
 - Shows usage instructions
+- Adapts to the right 50% panel
 
 **CodeSidebar Component**:
 - Shows alphabetical listing of codes
-- Allows collapsing/expanding for space efficiency
+- Allows browsing by letter
 - Fetches codes by letter prefix
 - Highlights currently selected code
+- Fits within the left 50% panel
 
 **Search Component**:
 - Provides search input with real-time results
 - Uses debounced API requests to prevent flooding
 - Displays clear results with highlighting
+- Adapts to container width for optimal display
 
 **ThemeContext**:
 - Detects system color scheme preference
 - Allows manual override of theme
 - Persists preference in localStorage
+- Supports dark and light mode with custom color scheme
 
-## Desktop Application
+**CodeDetailPage**:
+- Displays detailed code information
+- Shows proper heading and description
+- Renders markdown-formatted detailed context
+- Provides PDF download functionality
+- Adapted to fit within the right 50% panel
 
-The project includes an Electron desktop application with these features:
+## User Interface Design
 
-1. **Integrated Server**:
-   - Runs the Express server within the Electron process
-   - Manages MongoDB connection automatically
-   - Handles graceful shutdown of services
+The application uses a custom color palette with:
 
-2. **File Selection**:
-   - Uses native file dialogs for selecting data files
-   - Securely transfers file data to the server process
+1. **Light Mode Colors**:
+   - Primary: Soft blue (#5a9bd5)
+   - Secondary: Mint green (#7ccfae)
+   - Accent: Lavender (#b38cc4)
+   - Background: Very light blue (#f5f8fc)
+   - Text: Slate gray (#334155)
 
-3. **Windows Integration**:
-   - Creates desktop shortcuts
-   - Provides start menu entries
-   - Includes proper installer with MongoDB dependency check
+2. **Dark Mode Colors**:
+   - Primary: Deeper blue (#4981b3)
+   - Secondary: Darker mint (#5db495)
+   - Accent: Deep lavender (#9670ab)
+   - Background: Dark blue-gray (#1a202c)
+   - Text: Light gray-blue (#e2e8f0)
 
-4. **Build Configuration**:
-   - Uses Electron Forge for packaging
-   - Provides multiple installer options (Squirrel, Inno Setup)
-   - Cross-platform compatibility
-
-## Build and Deployment
-
-### Web Application
-```bash
-# Build for production web deployment
-npm run build
-npm run server
-```
-
-### Desktop Application
-```bash
-# Development mode
-npm run electron:dev
-
-# Package application
-npm run electron:package
-
-# Create installers
-npm run electron:make
-
-# Windows-specific builds
-npm run electron:make:windows
-```
+3. **Layout Structure**:
+   - Header: Fixed at top with app title and controls
+   - 50/50 Split: Left panel for browsing, right panel for search/details
+   - Each panel has independent scrolling
+   - Responsive adaptation for different screen sizes
 
 ## Performance Considerations
 
 To handle large datasets efficiently, the application:
 - Processes files in chunks on the server
 - Uses MongoDB indexing for fast searches
-- Implements pagination for large result sets
-- Uses debouncing for search inputs
-- Optimizes the rendering of large code lists with virtualization
+- Limits result sets to 50 items maximum
+- Uses debouncing for search inputs (300ms)
+- Implements virtual scrolling for large code lists
+- Properly handles overflow with independent scrolling panels
+- Optimizes styling and layout for minimal reflow
 
 ## Technology Stack
 
@@ -380,17 +417,15 @@ To handle large datasets efficiently, the application:
 - **Express**: Web server framework
 - **MongoDB**: NoSQL database
 - **Multer**: File upload handling
+- **EventSource**: Real-time progress updates
 
 ### Frontend
 - **React**: UI framework
 - **React Router**: For navigation
 - **Tailwind CSS**: For styling
 - **Context API**: For state management
-
-### Desktop App
-- **Electron**: Desktop application framework
-- **Electron Forge**: Build and packaging tool
-- **Inno Setup**: Advanced Windows installer (optional)
+- **jsPDF**: For PDF generation
+- **Vite**: Fast bundler and development server
 
 ## Browser and Platform Compatibility
 
@@ -402,55 +437,54 @@ The application is designed to work on:
   - MongoDB 4.0+ for backend storage
   - Node.js 14+ for server runtime
 
-## Troubleshooting Common Issues
-
-### 1. MongoDB Connection Issues
-- **Possible Causes**: MongoDB not running, connection refused, wrong port
-- **Solutions**: Ensure MongoDB service is running, check port configuration, check authentication settings
-
-### 2. File Upload Failures
-- **Possible Causes**: File too large, wrong format, temporary directory permissions
-- **Solutions**: Check file format, ensure uploads directory is writable, increase server timeout settings
-
-### 3. Search Not Working
-- **Possible Causes**: No data loaded, indexes not created, search term issues
-- **Solutions**: Upload data first, reset database to rebuild indexes, check search term format
-
-### 4. Desktop App Issues
-- **Possible Causes**: MongoDB not installed, path issues, permission problems
-- **Solutions**: Install MongoDB before running, run as administrator, check app logs
-
-## Future Enhancements
-
-Planned or potential enhancements include:
-- Advanced filtering by code categories
-- Data export capabilities (CSV, PDF)
-- Integration with medical terminology APIs
-- Analytics dashboard for usage patterns
-- Multi-language support
-- Offline mode with service workers
-
 ## Recent Updates and Enhancements
 
-1. **Sidebar Navigation**:
-   - Added alphabetical code browsing capability
-   - Implemented collapsible sidebar for better space management
-   - Added letter-based filtering of codes
+1. **UI Layout Improvements**:
+   - Implemented 50/50 split layout for sidebar and content
+   - Enhanced responsive design with better overflow handling
+   - Updated color palette with medical-themed pastel colors
 
-2. **Database Management**:
-   - Added reset database functionality
-   - Improved data reloading from original files
-   - Enhanced progress tracking and error handling
+2. **SplashScreen Enhancements**:
+   - Improved file upload UI with drag-and-drop functionality
+   - Added progress indication with real-time updates
+   - Enhanced error handling and validation feedback
 
-3. **Desktop Application**:
-   - Added Electron desktop application support
-   - Created Windows-specific build configuration
-   - Added installers with MongoDB dependency checks
+3. **CodeDetailPage Fixes**:
+   - Fixed property name mismatch for detailed context display
+   - Improved layout to fit within the right panel
+   - Enhanced PDF export functionality
 
-4. **UI Enhancements**:
-   - Improved dark mode support
-   - Added creator credit toggle functionality
-   - Enhanced responsive design for all screen sizes
+4. **Accessibility Improvements**:
+   - Better color contrast ratios for all UI elements
+   - Proper focus management for keyboard navigation
+   - Semantic HTML structure for screen readers
+
+5. **Performance Optimizations**:
+   - Reduced bundle size with code splitting
+   - Optimized MongoDB queries for faster search
+   - Improved rendering performance for large code lists
+
+## Common Error States and Handling
+
+1. **MongoDB Connection Errors**:
+   - Application checks MongoDB connection at startup
+   - User-friendly error messages for connection issues
+   - Automatic retry mechanisms for temporary connection problems
+
+2. **File Processing Errors**:
+   - Validation of file format before processing
+   - Detailed error messages for invalid file formats
+   - Progress tracking for large file uploads
+
+3. **Search Failures**:
+   - Graceful handling of empty results
+   - Error messages for failed search queries
+   - Fallback to simple text search when advanced search fails
+
+4. **UI Rendering Issues**:
+   - Error boundaries for component failures
+   - Fallback UI for data loading states
+   - Responsive design adaptations for different screen sizes
 
 ## Licensing and Attribution
 
