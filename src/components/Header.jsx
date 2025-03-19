@@ -21,21 +21,17 @@ function Header() {
       className={`fixed top-0 w-full z-50 transition-all duration-300 ${
         scrolled 
           ? darkMode 
-            ? 'bg-dark-surface bg-opacity-95 backdrop-blur-md text-gray-100 shadow-lg shadow-black/20' 
-            : 'bg-white bg-opacity-90 backdrop-blur-md text-gray-800 shadow-lg' 
+            ? 'bg-medical-darkSurface bg-opacity-95 backdrop-blur-md text-medical-darkText shadow-md' 
+            : 'bg-medical-lightSurface bg-opacity-90 backdrop-blur-md text-medical-lightText shadow-md' 
           : darkMode
-            ? 'bg-gradient-to-r from-blue-800 to-blue-900 text-white'
-            : 'bg-gradient-to-r from-blue-600 to-blue-800 text-white'
+            ? 'bg-gradient-to-r from-indigo-800 to-indigo-900 text-white'
+            : 'bg-gradient-to-r from-teal-500 to-indigo-500 text-white'
       }`}
     >
-      <div className="container mx-auto px-4 py-5 flex justify-between items-center">
-        <Link to="/" className="text-2xl font-bold flex items-center">
+      <div className="flex justify-between items-center h-16 px-4">
+        <Link to="/" className="text-xl font-bold flex items-center">
           <svg 
-            className={`w-8 h-8 mr-2 ${
-              scrolled 
-                ? darkMode ? 'text-blue-400' : 'text-blue-600' 
-                : 'text-white'
-            }`} 
+            className="w-6 h-6 mr-2" 
             xmlns="http://www.w3.org/2000/svg" 
             viewBox="0 0 24 24" 
             fill="none" 
@@ -47,20 +43,15 @@ function Header() {
             <path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9"></path>
             <polyline points="13 11 9 17 15 17 11 23"></polyline>
           </svg>
-          <span className="font-extrabold tracking-tight">ICD-10-CM</span>
-          <span className="ml-1 font-light">Browser</span>
+          <span className="font-semibold tracking-tight">ICD-10-CM</span>
         </Link>
         
         <nav>
-          <ul className="flex items-center space-x-6">
+          <ul className="flex items-center space-x-3">
             <li>
               <Link 
                 to="/" 
-                className={`font-medium hover:opacity-75 transition ${
-                  scrolled 
-                    ? darkMode ? 'text-blue-400' : 'text-blue-600' 
-                    : 'text-white'
-                }`}
+                className="font-medium hover:opacity-75 transition"
               >
                 Home
               </Link>
@@ -68,11 +59,7 @@ function Header() {
             <li>
               <button
                 onClick={toggleDarkMode}
-                className={`p-2 rounded-full hover:bg-opacity-10 hover:bg-gray-500 transition flex items-center justify-center ${
-                  scrolled 
-                    ? darkMode ? 'text-yellow-300' : 'text-gray-600' 
-                    : 'text-white'
-                }`}
+                className="p-2 rounded-full hover:bg-opacity-10 hover:bg-gray-500 transition flex items-center justify-center"
                 aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
               >
                 {darkMode ? (
@@ -91,11 +78,7 @@ function Header() {
                 href="https://github.com/stabgan/icd10cm" 
                 target="_blank" 
                 rel="noreferrer"
-                className={`flex items-center hover:opacity-75 transition ${
-                  scrolled 
-                    ? darkMode ? 'text-gray-300' : 'text-gray-600'
-                    : 'text-white'
-                }`}
+                className="p-1 rounded-full hover:bg-opacity-10 hover:bg-gray-500 flex items-center justify-center transition"
                 aria-label="GitHub Repository"
               >
                 <svg 

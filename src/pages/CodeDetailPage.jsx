@@ -147,83 +147,115 @@ function CodeDetailPage() {
     doc.save(`ICD10-CM-${codeData.code}-${codeData.description.substring(0, 20).replace(/[^\w]/g, '-')}.pdf`);
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className={`animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 ${darkMode ? 'border-blue-400' : 'border-blue-500'}`}></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={`${darkMode ? 'bg-red-900/20 border-red-800 text-red-300' : 'bg-red-50 border-red-200 text-red-700'} border p-4 rounded-lg shadow-md`}>
-        <h2 className="text-xl font-bold mb-2">Error</h2>
-        <p>{error}</p>
-        <Link to="/" className={`mt-4 inline-block ${darkMode ? 'text-blue-400' : 'text-blue-600'} hover:underline`}>
-          Return to search
-        </Link>
-      </div>
-    );
-  }
-
-  if (!codeData) {
-    return null;
-  }
-
   return (
-    <div className="max-w-4xl mx-auto animate-fadeIn">
-      <div className="mb-6">
-        <Link to="/" className={`${darkMode ? 'text-blue-400' : 'text-blue-600'} hover:underline flex items-center group`}>
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div className="w-full h-full overflow-auto">
+      {/* Back button with improved visibility */}
+      <div className="mb-6 pt-4 px-4">
+        <Link 
+          to="/" 
+          className={`inline-flex items-center px-4 py-2 rounded-lg transition-all
+                    ${darkMode 
+                      ? 'bg-blue-900/30 text-blue-300 hover:bg-blue-900/50' 
+                      : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}
+                    border ${darkMode ? 'border-blue-800' : 'border-blue-200'}`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          <span>Back to search</span>
+          Back to search
         </Link>
       </div>
-      
-      <div className={`${darkMode ? 'bg-dark-surface shadow-xl shadow-black/30 border-gray-800' : 'bg-white shadow-lg border-gray-200'} rounded-xl overflow-hidden border transition-all hover:shadow-xl`}>
-        <div className={`${darkMode ? 'bg-gradient-to-r from-blue-800 to-blue-900' : 'bg-gradient-to-r from-blue-600 to-blue-800'} text-white p-6`}>
-          <div className="text-sm text-blue-200 uppercase tracking-wider font-medium mb-1">ICD-10-CM Code</div>
-          <h1 className="text-3xl font-bold">
-            {codeData.code}
-          </h1>
+
+      {loading ? (
+        <div className="flex flex-col items-center justify-center h-64">
+          <div className="w-16 h-16 border-t-4 border-b-4 rounded-full animate-spin border-blue-500"></div>
+          <p className={`mt-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Loading code details...</p>
         </div>
-        
-        <div className={`p-6 border-b ${darkMode ? 'border-gray-800' : 'border-gray-100'}`}>
-          <h2 className={`text-xl font-semibold mb-4 ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{codeData.description}</h2>
+      ) : error ? (
+        <div className={`rounded-lg p-6 mx-4 ${
+          darkMode ? 'bg-red-900/20 border border-red-800 text-red-200' : 'bg-red-50 border border-red-200 text-red-800'
+        }`}>
+          <h2 className="text-xl font-bold mb-2">Error</h2>
+          <p>{error}</p>
         </div>
-        
-        {codeData.detailed_context && (
-          <div className={`p-6 ${darkMode ? 'bg-dark-surface' : 'bg-white'}`}>
-            <h3 className={`text-lg font-medium mb-3 ${darkMode ? 'text-gray-200' : 'text-gray-800'} flex items-center`}>
-              <svg className={`w-5 h-5 mr-2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Detailed Context
-            </h3>
-            <div className={`prose ${darkMode ? 'prose-invert' : 'prose-blue'} max-w-none rounded-lg border ${darkMode ? 'border-gray-800 bg-gray-900/50' : 'border-gray-100 bg-gray-50'} p-5 shadow-inner overflow-auto`}>
-              <ReactMarkdown>{codeData.detailed_context}</ReactMarkdown>
+      ) : codeData ? (
+        <div className="mx-4 mb-8">
+          {/* Code header section */}
+          <div className={`rounded-t-xl p-6 ${darkMode ? 'bg-blue-900' : 'bg-blue-600'} text-white`}>
+            <div className="mb-2 text-sm font-medium text-blue-200">ICD-10-CM CODE</div>
+            <h1 className="text-4xl font-bold mb-2">{codeData.code}</h1>
+          </div>
+          
+          {/* Description section */}
+          <div className={`p-6 rounded-b-xl mb-6 shadow-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <h2 className="text-2xl font-bold mb-4">{codeData.description}</h2>
+            
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-3 mt-6">
+              <button
+                onClick={handleDownloadPDF}
+                className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all
+                          ${darkMode 
+                            ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}
+                          border ${darkMode ? 'border-gray-600' : 'border-gray-300'}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download PDF
+              </button>
             </div>
           </div>
-        )}
-        
-        <div className={`${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'} p-6 border-t flex justify-between items-center`}>
-          <button 
-            onClick={handleDownloadPDF}
-            className={`${darkMode ? 'bg-blue-700 hover:bg-blue-800' : 'bg-blue-600 hover:bg-blue-700'} text-white py-2 px-4 rounded-lg transition-colors flex items-center shadow-md hover:shadow-lg`}
-          >
-            <svg className="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Download as PDF
-          </button>
           
-          <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-            Code: {codeData.code}
-          </div>
+          {/* Detailed context section - Fix property name mismatch */}
+          {codeData.detailed_context && (
+            <div className={`rounded-xl p-6 shadow-md mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <div className="flex items-center text-blue-500 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 className="text-xl font-bold">Detailed Context</h3>
+              </div>
+              
+              <div className={`prose max-w-none ${darkMode ? 'prose-dark' : 'prose-light'}`}>
+                <ReactMarkdown>
+                  {codeData.detailed_context}
+                </ReactMarkdown>
+              </div>
+            </div>
+          )}
+          
+          {/* Include related codes if available */}
+          {codeData.related_codes && codeData.related_codes.length > 0 && (
+            <div className={`rounded-xl p-6 shadow-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <h3 className="text-xl font-bold mb-4 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                </svg>
+                Related Codes
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {codeData.related_codes.map(code => (
+                  <Link
+                    key={code.code}
+                    to={`/code/${code.code}`}
+                    className={`p-4 rounded-lg transition-all ${
+                      darkMode 
+                        ? 'bg-gray-700 hover:bg-gray-600' 
+                        : 'bg-gray-100 hover:bg-gray-200'
+                    }`}
+                  >
+                    <div className="font-bold text-blue-500">{code.code}</div>
+                    <div className="text-sm">{code.description}</div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

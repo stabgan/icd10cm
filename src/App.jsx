@@ -76,45 +76,51 @@ function App() {
       } transition-colors duration-300`}>
         <Header />
         
-        {/* Only show sidebar when data is loaded */}
-        {dataStatus.loaded && !dataStatus.error && (
-          <CodeSidebar />
-        )}
-        
-        {/* Add padding-top to account for fixed header and padding-left for sidebar */}
-        <main className={`flex-grow container mx-auto px-4 py-8 pt-28 ${
-          dataStatus.loaded && !dataStatus.error ? 'ml-16 md:ml-64' : ''
-        } transition-all duration-300`}>
-          {!dataStatus.loaded && dataStatus.error ? (
-            <div className={`${
-              darkMode ? 'bg-red-900/20 border-red-800 text-red-300' : 'bg-red-50 border-red-500 text-red-700'
-            } border-l-4 p-4 rounded shadow-md`} role="alert">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className={`h-5 w-5 ${darkMode ? 'text-red-400' : 'text-red-500'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className={`text-sm ${darkMode ? 'text-red-300' : 'text-red-700'}`}>
-                    {dataStatus.error}
-                  </p>
+        {/* Main container with 50/50 split */}
+        <div className="flex flex-row w-full h-[calc(100vh-64px)] pt-16">
+          {/* Left sidebar - exactly 50% width */}
+          {dataStatus.loaded && !dataStatus.error && (
+            <div className="w-1/2 h-full overflow-auto border-r border-gray-200 dark:border-gray-700">
+              <CodeSidebar />
+            </div>
+          )}
+          
+          {/* Main content area - exactly 50% width */}
+          <main className={`${
+            dataStatus.loaded && !dataStatus.error ? 'w-1/2' : 'w-full'
+          } h-full overflow-auto p-6`}>
+            {!dataStatus.loaded && dataStatus.error ? (
+              <div className={`${
+                darkMode ? 'bg-red-900/20 border-red-800 text-red-300' : 'bg-red-50 border-red-500 text-red-700'
+              } border-l-4 p-4 rounded shadow-md`} role="alert">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className={`h-5 w-5 ${darkMode ? 'text-red-400' : 'text-red-500'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className={`text-sm ${darkMode ? 'text-red-300' : 'text-red-700'}`}>
+                      {dataStatus.error}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <Routes>
-              <Route path="/" element={<HomePage dataStatus={dataStatus} onToggleCreator={toggleCreatorCredit} />} />
-              <Route path="/code/:codeId" element={<CodeDetailPage />} />
-              <Route path="*" element={
-                <div className="text-center py-12">
-                  <h2 className={`text-2xl font-bold ${darkMode ? 'text-gray-200' : 'text-gray-700'} mb-2`}>Page Not Found</h2>
-                  <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>The page you're looking for doesn't exist.</p>
-                </div>
-              } />
-            </Routes>
-          )}
-        </main>
+            ) : (
+              <Routes>
+                <Route path="/" element={<HomePage dataStatus={dataStatus} onToggleCreator={toggleCreatorCredit} />} />
+                <Route path="/code/:codeId" element={<CodeDetailPage />} />
+                <Route path="*" element={
+                  <div className="text-center py-12">
+                    <h2 className={`text-2xl font-bold ${darkMode ? 'text-gray-200' : 'text-gray-700'} mb-2`}>Page Not Found</h2>
+                    <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>The page you're looking for doesn't exist.</p>
+                  </div>
+                } />
+              </Routes>
+            )}
+          </main>
+        </div>
+        
         <Footer showCreator={showCreator} />
       </div>
     </Router>

@@ -13,10 +13,11 @@
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
+    "check-mongodb": "node check-mongodb.js",
     "server": "node server.js",
-    "dev:all": "concurrently -k \"npm run dev\" \"npm run server\"",
+    "dev:all": "npm run check-mongodb && concurrently -k \"npm run dev\" \"npm run server\"",
     "start": "npm run build && npm run server",
-    "start:all": "node start.js"
+    "start:all": "npm run check-mongodb && node start.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

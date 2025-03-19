@@ -108,29 +108,63 @@ app.post('/api/process-file', upload.single('file'), async (req, res) => {
   processFileInBackground(filePath);
 });
 
-// SSE endpoint for progress updates
+// Endpoint for processing status updates
 app.get('/api/processing-status', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+  // Set headers for Server-Sent Events
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*'
+  });
   
-  // Send initial status
+  // Write initial status
   res.write(`data: ${JSON.stringify(processingStatus)}\n\n`);
   
-  // Set up interval to send updates
-  const intervalId = setInterval(() => {
-    res.write(`data: ${JSON.stringify(processingStatus)}\n\n`);
+  // Function to send updates
+  const sendUpdate = () => {
+    // Clone the status to avoid reference issues
+    const currentStatus = { ...processingStatus };
     
-    // If processing is complete or errored, end the connection
-    if (!processingStatus.inProgress) {
-      clearInterval(intervalId);
+    // Add timestamp for debugging
+    currentStatus.timestamp = new Date().toISOString();
+    
+    // Add more user-friendly messages based on progress
+    if (currentStatus.progress < 10) {
+      currentStatus.friendlyStatus = 'Initializing...';
+    } else if (currentStatus.progress < 20) {
+      currentStatus.friendlyStatus = 'Preparing database...';
+    } else if (currentStatus.progress < 50) {
+      currentStatus.friendlyStatus = 'Reading file data...';
+    } else if (currentStatus.progress < 70) {
+      currentStatus.friendlyStatus = 'Processing medical codes...';
+    } else if (currentStatus.progress < 90) {
+      currentStatus.friendlyStatus = 'Organizing data structures...';
+    } else if (currentStatus.progress < 95) {
+      currentStatus.friendlyStatus = 'Creating database indexes...';
+    } else if (currentStatus.progress < 100) {
+      currentStatus.friendlyStatus = 'Finalizing...';
+    } else {
+      currentStatus.friendlyStatus = 'Complete!';
+    }
+    
+    // Send the update
+    res.write(`data: ${JSON.stringify(currentStatus)}\n\n`);
+    
+    // Close connection when processing is complete or on error
+    if (!processingStatus.inProgress || processingStatus.error) {
+      clearInterval(interval);
       res.end();
     }
-  }, 1000);
+  };
   
-  // Handle client disconnect
+  // Set up interval to send updates
+  const interval = setInterval(sendUpdate, 500);
+  
+  // Clean up on close
   req.on('close', () => {
-    clearInterval(intervalId);
+    clearInterval(interval);
+    res.end();
   });
 });
 
@@ -143,17 +177,6 @@ app.post('/api/reset-database', async (req, res) => {
     if (!db) {
       return res.status(500).json({ 
         error: 'Failed to connect to MongoDB',
-        success: false
-      });
-    }
-    
-    // Find last processed file info from indexMetaCollection
-    const indexCollection = db.collection(indexMetaCollection);
-    const indexData = await indexCollection.findOne({ id: 'main' });
-    
-    if (!indexData) {
-      return res.status(404).json({ 
-        error: 'No data has been loaded before, cannot reset',
         success: false
       });
     }
@@ -172,20 +195,95 @@ app.post('/api/reset-database', async (req, res) => {
       status: 'processing'
     });
     
-    // Reset database in background (reuse same function that processes uploads)
-    const collection = db.collection(codesCollection);
-    await collection.deleteMany({});
-    await indexCollection.deleteMany({});
-    
-    // Check if the last uploaded file data exists in processingStatus
-    if (processingStatus.fileData && processingStatus.fileData.path && fs.existsSync(processingStatus.fileData.path)) {
-      processFileInBackground(processingStatus.fileData.path);
-    } else {
+    try {
+      processingStatus.message = 'Dropping collections...';
+      processingStatus.progress = 10;
+      
+      // Get all collection names
+      const collections = await db.listCollections().toArray();
+      const collectionNames = collections.map(c => c.name);
+      const totalCollections = collectionNames.length;
+      
+      if (totalCollections === 0) {
+        processingStatus.message = 'No collections found to reset';
+        processingStatus.progress = 50;
+      } else {
+        // Drop each collection except system collections
+        let droppedCount = 0;
+        for (const name of collectionNames) {
+          if (!name.startsWith('system.')) {
+            try {
+              // First drop all indexes in the collection (except _id)
+              const collection = db.collection(name);
+              const indexInfo = await collection.indexInformation().catch(e => ({}));
+              
+              for (const indexName of Object.keys(indexInfo)) {
+                if (indexName !== '_id_') {
+                  await collection.dropIndex(indexName).catch(e => {
+                    console.warn(`Warning: Failed to drop index ${indexName} in collection ${name}:`, e.message);
+                  });
+                }
+              }
+              
+              // Then drop the collection
+              await collection.drop().catch(err => {
+                console.warn(`Warning: Failed to drop collection ${name}:`, err.message);
+              });
+              
+              droppedCount++;
+              processingStatus.progress = 10 + Math.floor((droppedCount / totalCollections) * 40);
+              processingStatus.message = `Dropped collection ${name} (${droppedCount}/${totalCollections})`;
+            } catch (err) {
+              console.warn(`Error processing collection ${name}:`, err.message);
+            }
+          }
+        }
+      }
+      
+      processingStatus.progress = 50;
+      processingStatus.message = 'Collections reset complete';
+      
+      // Check if the last uploaded file data exists in processingStatus
+      if (processingStatus.fileData && processingStatus.fileData.path && fs.existsSync(processingStatus.fileData.path)) {
+        processingStatus.message = 'Reloading data from last uploaded file...';
+        processFileInBackground(processingStatus.fileData.path);
+      } else {
+        // Try to find the most recent file in uploads directory
+        const uploadsDir = path.join(__dirname, 'uploads');
+        if (fs.existsSync(uploadsDir)) {
+          const files = fs.readdirSync(uploadsDir);
+          if (files.length > 0) {
+            // Sort by creation time, most recent first
+            const sortedFiles = files.map(file => {
+              return {
+                name: file,
+                time: fs.statSync(path.join(uploadsDir, file)).mtime.getTime()
+              };
+            }).sort((a, b) => b.time - a.time);
+            
+            if (sortedFiles.length > 0) {
+              const newestFile = path.join(uploadsDir, sortedFiles[0].name);
+              processingStatus.message = `Reloading data from most recent file: ${path.basename(newestFile)}`;
+              processFileInBackground(newestFile);
+              return;
+            }
+          }
+        }
+        
+        processingStatus = {
+          inProgress: false,
+          progress: 100,
+          message: 'Reset completed. No file found to reload. Please upload a new file.',
+          error: null
+        };
+      }
+    } catch (error) {
+      console.error('Error during reset:', error);
       processingStatus = {
         inProgress: false,
         progress: 0,
-        message: 'Reset completed but no previous file data found to reload',
-        error: null
+        message: 'Error during reset',
+        error: error.message
       };
     }
   } catch (error) {
@@ -208,166 +306,241 @@ app.post('/api/reset-database', async (req, res) => {
 
 // Process file in background
 async function processFileInBackground(filePath) {
-  const db = await connectToMongo();
-  
-  if (!db) {
-    processingStatus.inProgress = false;
-    processingStatus.error = 'Failed to connect to MongoDB. Please check if the service is running.';
-    fs.unlinkSync(filePath);
-    return;
-  }
-  
-  const collection = db.collection(codesCollection);
-  const indexCollection = db.collection(indexMetaCollection);
+  // Add start time tracking
+  const startTime = Date.now();
   
   try {
-    // Clear existing data
-    processingStatus.message = 'Clearing existing data...';
-    await collection.deleteMany({});
-    await indexCollection.deleteMany({});
+    // First check if the file exists and is a regular file, not a directory
+    const fileStats = fs.statSync(filePath);
+    if (!fileStats.isFile()) {
+      processingStatus = {
+        inProgress: false,
+        progress: 0,
+        message: 'Error: Not a valid file',
+        error: 'The selected path is not a file'
+      };
+      return;
+    }
     
-    const startTime = Date.now();
-    const fileStream = createReadStream(filePath);
-    const rl = createInterface({
-      input: fileStream,
-      crlfDelay: Infinity
-    });
+    const db = await connectToMongo();
     
-    let count = 0;
-    const batchSize = 500;
-    let batch = [];
-    let letterChunks = {};
-    
-    // Get file size for accurate progress calculation
-    const stats = fs.statSync(filePath);
-    const fileSize = stats.size;
-    let bytesRead = 0;
-    
-    processingStatus.message = 'Processing data...';
-    
-    // Process file line by line
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      
-      bytesRead += Buffer.byteLength(line) + 1; // +1 for newline character
-      processingStatus.progress = Math.min(99, Math.floor((bytesRead / fileSize) * 100));
-      
+    if (!db) {
+      processingStatus.inProgress = false;
+      processingStatus.error = 'Failed to connect to MongoDB. Please check if the service is running.';
       try {
-        const codeData = JSON.parse(line);
-        if (codeData.code && codeData.description) {
-          // Add to batch
-          batch.push(codeData);
-          count++;
-          
-          // Organize by first letter for letter chunks
-          const firstChar = codeData.code.charAt(0);
-          if (!letterChunks[firstChar]) {
-            letterChunks[firstChar] = [];
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (e) {
+        console.error('Error cleaning up file:', e);
+      }
+      return;
+    }
+    
+    const collection = db.collection(codesCollection);
+    const indexCollection = db.collection(indexMetaCollection);
+    
+    try {
+      // Clear existing data
+      processingStatus.message = 'Clearing existing data...';
+      await collection.deleteMany({});
+      await indexCollection.deleteMany({});
+      
+      // Get file size for accurate progress calculation
+      const stats = fs.statSync(filePath);
+      const fileSize = stats.size;
+      let bytesRead = 0;
+      
+      processingStatus.message = 'Processing data...';
+      
+      // Process file line by line
+      const fileStream = createReadStream(filePath);
+      const rl = createInterface({
+        input: fileStream,
+        crlfDelay: Infinity
+      });
+      
+      let count = 0;
+      const batchSize = 500;
+      let batch = [];
+      let letterChunks = {};
+      
+      // Process file line by line
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+        
+        bytesRead += Buffer.byteLength(line) + 1; // +1 for newline character
+        processingStatus.progress = Math.min(90, Math.floor((bytesRead / fileSize) * 100));
+        
+        try {
+          const codeData = JSON.parse(line);
+          if (codeData.code && codeData.description) {
+            // Add to batch
+            batch.push(codeData);
+            count++;
+            
+            // Organize by first letter for letter chunks
+            const firstChar = codeData.code.charAt(0);
+            if (!letterChunks[firstChar]) {
+              letterChunks[firstChar] = [];
+            }
+            letterChunks[firstChar].push(codeData.code);
+            
+            // Insert batch when it reaches batchSize
+            if (batch.length >= batchSize) {
+              await collection.insertMany(batch);
+              batch = [];
+            }
           }
-          letterChunks[firstChar].push(codeData.code);
-          
-          // Insert batch when it reaches batchSize
-          if (batch.length >= batchSize) {
-            await collection.insertMany(batch);
-            batch = [];
+        } catch (error) {
+          console.error('Error parsing line:', error);
+          // Continue processing even if one line has an error
+        }
+      }
+      
+      // Insert any remaining documents
+      if (batch.length > 0) {
+        await collection.insertMany(batch);
+      }
+      
+      // Create indexes for faster searching
+      processingStatus.message = 'Creating indexes...';
+      processingStatus.progress = 95;
+      
+      // Check for existing indexes and drop them before creating new ones
+      try {
+        const indexInfo = await collection.indexInformation();
+        const indexNames = Object.keys(indexInfo);
+        
+        // Drop existing indexes except the default _id index
+        for (const indexName of indexNames) {
+          if (indexName !== '_id_') {
+            await collection.dropIndex(indexName);
           }
         }
-      } catch (error) {
-        console.error('Error parsing line:', error);
-        // Continue processing even if one line has an error
+        
+        console.log('Existing indexes dropped successfully');
+      } catch (err) {
+        console.warn('No existing indexes to drop or error dropping indexes:', err.message);
+      }
+      
+      // Create basic indexes separately
+      await collection.createIndex({ code: 1 }, { name: "code_index" });
+      processingStatus.progress = 96;
+      
+      // Only create one text index to avoid conflicts
+      // MongoDB only allows one text index per collection
+      try {
+        processingStatus.progress = 98;
+        await collection.createIndex({ 
+          description: "text", 
+          detail_context: "text" 
+        }, {
+          weights: {
+            description: 3,   // Higher priority
+            detail_context: 1 // Lower priority
+          },
+          name: "text_search_index",
+          default_language: "english"
+        });
+      } catch (indexError) {
+        console.error('Error creating text index:', indexError);
+        // If there's an error with indexes, try a simpler approach
+        try {
+          await collection.createIndex({ description: "text" }, { name: "description_text_index" });
+        } catch (fallbackError) {
+          console.error('Error creating fallback index:', fallbackError);
+        }
+      }
+      
+      // Store metadata
+      await indexCollection.insertOne({
+        id: 'main',
+        totalCodes: count,
+        chunkCount: Object.keys(letterChunks).length,
+        chunkMap: letterChunks,
+        processTimeSeconds: (Date.now() - startTime) / 1000,
+        lastUpdated: new Date().toISOString()
+      });
+      
+      // Clean up uploaded file - using try/catch to handle permission issues
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (e) {
+        console.warn('Warning: Could not delete uploaded file:', e.message);
+      }
+      
+      // Update status to complete
+      processingStatus = {
+        inProgress: false,
+        progress: 100,
+        message: 'Processing complete',
+        error: null,
+        totalCodes: count,
+        processTimeSeconds: (Date.now() - startTime) / 1000,
+        fileData: {
+          path: filePath,
+          originalName: processingStatus.fileData ? processingStatus.fileData.originalName : 'unknown',
+          size: stats.size
+        }
+      };
+    } catch (error) {
+      console.error('Error processing file:', error);
+      processingStatus = {
+        inProgress: false,
+        progress: 0,
+        message: 'Error processing file',
+        error: error.message
+      };
+      
+      // Clean up in case of error
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (e) {
+        console.warn('Warning: Could not delete uploaded file:', e.message);
       }
     }
-    
-    // Insert any remaining documents
-    if (batch.length > 0) {
-      await collection.insertMany(batch);
-    }
-    
-    // Create indexes for faster searching
-    processingStatus.message = 'Creating indexes...';
-    processingStatus.progress = 99;
-    await collection.createIndex({ code: 1 });
-    await collection.createIndex({ description: "text" });
-    // Add additional indexes for enhanced search
-    await collection.createIndex({ "detail_context": "text" });
-    // Compound text index on multiple fields
-    await collection.createIndex({ 
-      code: "text", 
-      description: "text", 
-      detail_context: "text" 
-    }, {
-      weights: {
-        code: 10,        // Highest priority
-        description: 5,   // Medium priority
-        detail_context: 2 // Lower priority
-      },
-      name: "comprehensive_search_index"
-    });
-    
-    // Store metadata
-    await indexCollection.insertOne({
-      id: 'main',
-      totalCodes: count,
-      chunkCount: Object.keys(letterChunks).length,
-      chunkMap: letterChunks,
-      processTimeSeconds: (Date.now() - startTime) / 1000,
-      lastUpdated: new Date().toISOString()
-    });
-    
-    // Clean up uploaded file
-    fs.unlinkSync(filePath);
-    
-    // Update status to complete
-    processingStatus = {
-      inProgress: false,
-      progress: 100,
-      message: 'Processing complete',
-      error: null,
-      totalCodes: count,
-      processTimeSeconds: (Date.now() - startTime) / 1000
-    };
   } catch (error) {
     console.error('Error processing file:', error);
     processingStatus = {
       inProgress: false,
       progress: 0,
-      message: 'Error processing file',
+      message: 'Error initializing file processing',
       error: error.message
     };
-    
-    // Clean up in case of error
-    try {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    } catch (e) {
-      console.error('Error cleaning up file:', e);
-    }
   }
 }
 
-// Check if data is loaded
+// API endpoint to check if data is loaded
 app.get('/api/check-data', async (req, res) => {
   try {
     const db = await connectToMongo();
     if (!db) {
-      return res.status(500).json({ 
-        error: 'Failed to connect to MongoDB',
-        dataLoaded: false 
+      // Return 200 with empty result if MongoDB is not connected
+      return res.json({ 
+        loaded: false, 
+        error: 'MongoDB not connected',
+        message: 'MongoDB service is not running or not accessible'
       });
     }
     
-    const indexCollection = db.collection(indexMetaCollection);
-    const indexData = await indexCollection.findOne({ id: 'main' });
+    const collection = db.collection(codesCollection);
+    const count = await collection.countDocuments();
     
-    res.json({ 
-      dataLoaded: !!indexData,
-      totalCodes: indexData ? indexData.totalCodes : 0,
-      lastUpdated: indexData ? indexData.lastUpdated : null,
-      chunkMap: indexData ? indexData.chunkMap : null
+    res.json({
+      loaded: count > 0,
+      count: count
     });
   } catch (error) {
-    res.status(500).json({ error: 'Error checking data: ' + error.message });
+    console.error('Error checking data:', error);
+    res.status(200).json({ 
+      loaded: false, 
+      error: error.message 
+    });
   }
 });
 
@@ -531,11 +704,17 @@ app.get('/api/codes/:letter', async (req, res) => {
   }
 });
 
-// Catch-all route to serve the frontend
+// Catch-all route to serve the frontend (React Router support)
 app.get('*', (req, res) => {
-  // Try to find the index.html file
+  // Ignore API routes
+  if (req.url.startsWith('/api')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  
+  // Try to find the index.html file for client-side routing
   const indexFile = path.join(distPath, 'index.html');
   if (fs.existsSync(indexFile)) {
+    console.log(`Serving index.html for path: ${req.path}`);
     res.sendFile(indexFile);
   } else {
     console.error(`Cannot find index.html at ${indexFile}`);
@@ -544,8 +723,19 @@ app.get('*', (req, res) => {
 });
 
 // Start server
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-  console.log(`Server directory: ${__dirname}`);
-  console.log(`Static files served from: ${distPath}`);
-}); 
+const startServer = (attemptPort = port) => {
+  const server = app.listen(attemptPort, () => {
+    console.log(`Server running on port ${attemptPort}`);
+    console.log(`Server directory: ${__dirname}`);
+    console.log(`Static files served from: ${distPath}`);
+  }).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`Port ${attemptPort} is in use, trying port ${attemptPort + 1}...`);
+      startServer(attemptPort + 1);
+    } else {
+      console.error('Server error:', err);
+    }
+  });
+};
+
+startServer(); 

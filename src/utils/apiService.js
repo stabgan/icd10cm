@@ -7,7 +7,7 @@ export async function checkDataLoaded() {
   try {
     const response = await fetch(`${API_URL}/check-data`);
     const data = await response.json();
-    return data.dataLoaded;
+    return data.loaded;
   } catch (error) {
     console.error('Error checking data loaded:', error);
     return false;
