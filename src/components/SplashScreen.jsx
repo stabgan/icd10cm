@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 
 // Backend API URL
-const BASE_API_URL = '/api';
+const BASE_API_URL = 'http://localhost:5000/api';
 
 function SplashScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -247,6 +247,13 @@ function SplashScreen() {
                 {progress === 100 ? 'Done!' : 'Processing...'}
               </div>
             </div>
+            
+            <style dangerouslySetInnerHTML={{ __html: `
+              @keyframes shimmer {
+                0% { background-position: -50% 0; }
+                100% { background-position: 150% 0; }
+              }
+            ` }} />
           </div>
         )}
         

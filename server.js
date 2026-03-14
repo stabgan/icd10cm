@@ -22,44 +22,25 @@ if (!fs.existsSync(uploadsDir)) {
   console.log(`Created uploads directory: ${uploadsDir}`);
 }
 
-// Configure multer with file size limit and type filter
-const upload = multer({
-  dest: uploadsDir,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB max
-  fileFilter: (_req, file, cb) => {
-    const allowed = ['.json', '.jsonl'];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only .json and .jsonl files are allowed'));
-    }
-  },
-});
-
-// Helper: escape user input for use in MongoDB $regex
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+const upload = multer({ dest: uploadsDir });
 
 // Static file serving
 const distPath = path.join(__dirname, 'dist');
 console.log(`Using dist path: ${distPath}`);
 
-// MongoDB connection (single shared client)
+// MongoDB connection
 const uri = process.env.MONGO_URI || 'mongodb://localhost:27017';
 const client = new MongoClient(uri, {
   connectTimeoutMS: 10000,
-  serverSelectionTimeoutMS: 10000,
+  serverSelectionTimeoutMS: 10000
 });
 const dbName = 'icd10cm';
 const codesCollection = 'codes';
 const indexMetaCollection = 'indexMeta';
-let cachedDb = null;
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json());
 app.use(express.static(distPath));
 
 // Store processing state globally
@@ -71,17 +52,14 @@ let processingStatus = {
   fileData: null
 };
 
-// Connect to MongoDB with retry (reuses cached connection)
+// Connect to MongoDB with retry
 async function connectToMongo() {
-  if (cachedDb) return cachedDb;
-
   let retries = 5;
   while (retries > 0) {
     try {
       await client.connect();
       console.log('Connected to MongoDB service');
-      cachedDb = client.db(dbName);
-      return cachedDb;
+      return client.db(dbName);
     } catch (error) {
       retries--;
       const remainingAttempts = retries > 0 ? `(${retries} attempts left)` : '(final attempt)';
@@ -90,10 +68,12 @@ async function connectToMongo() {
       if (retries === 0) {
         console.error('Failed to connect to MongoDB after multiple attempts');
         console.error('Make sure the MongoDB service is running on port 27017');
+        console.error('You can check this by running "services.msc" and looking for MongoDB service');
         return null;
       }
       
       console.log(`Connection failed, retrying... ${remainingAttempts}`);
+      // Wait longer between retries
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
@@ -184,6 +164,7 @@ app.get('/api/processing-status', (req, res) => {
   // Clean up on close
   req.on('close', () => {
     clearInterval(interval);
+    res.end();
   });
 });
 
@@ -593,12 +574,9 @@ app.get('/api/code-index', async (req, res) => {
 // Search codes
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
-  if (!query || typeof query !== 'string' || query.trim().length === 0) {
+  if (!query) {
     return res.json({ results: [] });
   }
-
-  // Limit query length to prevent abuse
-  const sanitizedQuery = query.trim().slice(0, 200);
   
   try {
     const db = await connectToMongo();
@@ -612,7 +590,7 @@ app.get('/api/search', async (req, res) => {
     const collection = db.collection(codesCollection);
     
     // First try exact code match
-    const exactMatch = await collection.findOne({ code: sanitizedQuery.toUpperCase() });
+    const exactMatch = await collection.findOne({ code: query.toUpperCase() });
     if (exactMatch) {
       return res.json({ results: [exactMatch] });
     }
@@ -620,9 +598,9 @@ app.get('/api/search', async (req, res) => {
     // Then try text search on multiple fields
     const results = await collection.find({
       $or: [
-        { code: { $regex: escapeRegex(sanitizedQuery), $options: 'i' } },
+        { code: { $regex: query, $options: 'i' } },
         { $text: { 
-          $search: sanitizedQuery,
+          $search: query,
           $caseSensitive: false,
           $diacriticSensitive: false
         }}
@@ -640,16 +618,20 @@ app.get('/api/search', async (req, res) => {
     
     // Highlight matching terms in results
     const processedResults = results.map(result => {
+      // Create a processed copy to avoid modifying the original
       const processed = { ...result };
       
+      // Only include highlightedContext if detail_context exists
       if (result.detail_context) {
-        const lowerQuery = sanitizedQuery.toLowerCase();
+        // Find the position of the query in the detail_context
+        const lowerQuery = query.toLowerCase();
         const lowerContext = result.detail_context.toLowerCase();
         const index = lowerContext.indexOf(lowerQuery);
         
         if (index !== -1) {
+          // Get a snippet around the matching text
           const startPos = Math.max(0, index - 50);
-          const endPos = Math.min(result.detail_context.length, index + sanitizedQuery.length + 100);
+          const endPos = Math.min(result.detail_context.length, index + query.length + 100);
           let snippet = result.detail_context.substring(startPos, endPos);
           
           // Add ellipsis if we're not at the beginning/end
@@ -700,11 +682,6 @@ app.get('/api/code/:id', async (req, res) => {
 // Get codes for a letter
 app.get('/api/codes/:letter', async (req, res) => {
   const letter = req.params.letter;
-
-  // Validate: only allow a single alphanumeric character
-  if (!letter || !/^[A-Za-z0-9]$/.test(letter)) {
-    return res.status(400).json({ error: 'Invalid letter parameter', codes: [] });
-  }
   
   try {
     const db = await connectToMongo();
@@ -718,7 +695,7 @@ app.get('/api/codes/:letter', async (req, res) => {
     const collection = db.collection(codesCollection);
     
     const codes = await collection.find({
-      code: { $regex: `^${escapeRegex(letter)}`, $options: 'i' }
+      code: { $regex: `^${letter}`, $options: 'i' }
     }).limit(1000).toArray();
     
     res.json({ codes });

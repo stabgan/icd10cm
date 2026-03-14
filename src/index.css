@@ -140,9 +140,3 @@ body {
 .dark body {
   @apply bg-dark-bg text-dark-text;
 } 
-
-/* Shimmer animation for progress bar */
-@keyframes shimmer {
-  0% { background-position: -50% 0; }
-  100% { background-position: 150% 0; }
-}

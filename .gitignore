@@ -114,7 +114,4 @@ public/data/chunks/*
 !public/data/chunks/.gitkeep
 
 # Exceptions for example files
-!data/test_data.jsonl
-
-# Vite timestamp files
-vite.config.js.timestamp-*
+!data/test_data.jsonl 
