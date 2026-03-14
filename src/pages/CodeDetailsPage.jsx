@@ -21,7 +21,6 @@ import GetAppIcon from '@mui/icons-material/GetApp';
 import PrintIcon from '@mui/icons-material/Print';
 import ShareIcon from '@mui/icons-material/Share';
 import MarkdownRenderer from '../components/MarkdownRenderer';
-import { generatePDF, formatPdfTitle } from '../utils/pdfUtils';
 import ErrorIcon from '@mui/icons-material/Error';
 
 const CodeDetailsPage = () => {
@@ -30,6 +29,8 @@ const CodeDetailsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [detailedContext, setDetailedContext] = useState('');
   const contentRef = useRef(null);
   const theme = useTheme();
   const [timeoutOccurred, setTimeoutOccurred] = useState(false);
@@ -79,20 +80,17 @@ const CodeDetailsPage = () => {
     
     try {
       setPdfGenerating(true);
-      
-      const fileName = `icd10_${codeData.code.replace(/\./g, '_')}.pdf`;
-      const title = formatPdfTitle(codeData.code, codeData.description);
-      
-      await generatePDF(contentRef.current, fileName, {
-        title,
-        headerText: `ICD-10-CM Code: ${codeData.code}`,
-      });
-      
+      window.print();
     } catch (error) {
       console.error('Error generating PDF:', error);
     } finally {
       setPdfGenerating(false);
     }
+  };
+
+  // Handle print
+  const handlePrintClick = () => {
+    window.print();
   };
 
   useEffect(() => {
@@ -543,13 +541,6 @@ const CodeDetailsPage = () => {
                 }}>
                   {(codeData.detailed_context || detailedContext) ? (
                     <MarkdownRenderer content={getFormattedContext()} />
-                  ) : loadingDetails ? (
-                    <Box sx={{ textAlign: 'center', py: 3 }}>
-                      <CircularProgress size={40} />
-                      <Typography variant="body2" sx={{ mt: 2 }}>
-                        Loading detailed information...
-                      </Typography>
-                    </Box>
                   ) : (
                     <Typography color="text.secondary">
                       No detailed information available for this code.

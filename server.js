@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import multer from 'multer';
 import fs from 'fs';
 import { createReadStream } from 'fs';
@@ -39,7 +40,7 @@ const upload = multer({
 
 // Helper: escape user input for use in MongoDB $regex
 function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return str.replace(/[.*+?^${}()|[\]\\]/g, (match) => '\\' + match);
 }
 
 // Static file serving
@@ -58,6 +59,7 @@ const indexMetaCollection = 'indexMeta';
 let cachedDb = null;
 
 // Middleware
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(distPath));
@@ -586,7 +588,7 @@ app.get('/api/code-index', async (req, res) => {
       lastUpdated: indexData.lastUpdated
     });
   } catch (error) {
-    res.status(500).json({ error: 'Error retrieving code index: ' + error.message });
+    res.status(500).json({ error: 'Error retrieving code index' });
   }
 });
 
@@ -665,15 +667,15 @@ app.get('/api/search', async (req, res) => {
     
     res.json({ results: processedResults });
   } catch (error) {
-    res.status(500).json({ error: 'Error searching: ' + error.message });
+    res.status(500).json({ error: 'Error searching codes' });
   }
 });
 
 // Get code by ID
 app.get('/api/code/:id', async (req, res) => {
   const codeId = req.params.id;
-  if (!codeId) {
-    return res.status(400).json({ error: 'Code ID required' });
+  if (!codeId || typeof codeId !== 'string' || codeId.length > 20) {
+    return res.status(400).json({ error: 'Invalid code ID' });
   }
   
   try {
@@ -693,7 +695,7 @@ app.get('/api/code/:id', async (req, res) => {
     
     res.json({ code });
   } catch (error) {
-    res.status(500).json({ error: 'Error retrieving code: ' + error.message });
+    res.status(500).json({ error: 'Error retrieving code' });
   }
 });
 
@@ -723,7 +725,7 @@ app.get('/api/codes/:letter', async (req, res) => {
     
     res.json({ codes });
   } catch (error) {
-    res.status(500).json({ error: 'Error retrieving codes: ' + error.message });
+    res.status(500).json({ error: 'Error retrieving codes', codes: [] });
   }
 });
 
@@ -741,7 +743,7 @@ app.get('*', (req, res) => {
     res.sendFile(indexFile);
   } else {
     console.error(`Cannot find index.html at ${indexFile}`);
-    res.status(500).send(`Server Error: Cannot find index.html. Looked at: ${indexFile}`);
+    res.status(500).send('Server Error: Frontend build not found. Run "npm run build" first.');
   }
 });
 
@@ -759,6 +761,24 @@ const startServer = (attemptPort = port) => {
       console.error('Server error:', err);
     }
   });
+
+  // Graceful shutdown: close MongoDB connection on exit
+  const shutdown = async () => {
+    console.log('\nShutting down gracefully...');
+    server.close(() => {
+      console.log('HTTP server closed');
+    });
+    try {
+      await client.close();
+      console.log('MongoDB connection closed');
+    } catch (err) {
+      console.error('Error closing MongoDB:', err.message);
+    }
+    process.exit(0);
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 };
 
 startServer(); 

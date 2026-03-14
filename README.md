@@ -1,33 +1,40 @@
 # ICD-10-CM Browser
 
-A fast, modern web application for browsing and searching ICD-10-CM medical diagnosis codes, powered by MongoDB and Node.js.
+A fast, modern web application for browsing and searching ICD-10-CM medical diagnosis codes.
 
 ## What It Does
 
-ICD-10-CM Browser lets healthcare professionals, medical coders, and researchers quickly search, browse, and export the full ICD-10-CM code set. Upload a JSONL data file once, and the app indexes everything into MongoDB for instant lookups. A clean split-pane UI shows an alphabetical code sidebar alongside detailed code views.
+Upload a JSONL data file containing ICD-10-CM codes, and the app indexes everything into MongoDB for instant full-text search. A split-pane UI shows an alphabetical code sidebar alongside detailed code views with PDF export, dark/light theming, and live progress during data import.
 
-## Features
+## Architecture
 
-- **Full-text search** — find codes by ID, description, or clinical context with real-time suggestions
-- **Alphabetical sidebar** — browse the entire code set letter by letter
-- **Dark / Light mode** — toggle between themes; respects system preference
-- **PDF export** — download any code's details as a formatted PDF
-- **Data upload wizard** — guided splash screen with progress bar for first-time setup
-- **Server-Sent Events** — live progress updates during data processing
-- **Responsive layout** — works on desktop and tablet screens
+```
+Browser (React 18 SPA)
+  ├── Search bar → /api/search (MongoDB text index + regex)
+  ├── Sidebar   → /api/codes/:letter
+  ├── Detail    → /api/code/:id (with PDF export via jsPDF)
+  └── Upload    → /api/process-file (multer + SSE progress)
 
-## Tech Stack
+Express Server (Node.js)
+  ├── Helmet security headers
+  ├── CORS middleware
+  ├── MongoDB driver (shared client, graceful shutdown)
+  └── Static file serving (Vite build output)
+```
+
+## 🛠 Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | ⚛️ Frontend | React 18, React Router 6 |
 | 🎨 Styling | Tailwind CSS 3, @tailwindcss/typography |
 | 🖥️ Backend | Node.js, Express 4 |
-| 🗄️ Database | MongoDB 6 (via official Node driver) |
+| 🔒 Security | Helmet (HTTP headers) |
+| 🗄️ Database | MongoDB 6 (official Node driver) |
 | 📦 Bundler | Vite 5 |
 | 📄 PDF | jsPDF |
-| 🔍 Search | MongoDB text indexes + regex |
-| 📂 Upload | Multer |
+| 🔍 Search | MongoDB text indexes + escaped regex |
+| 📂 Upload | Multer (500 MB limit) |
 
 ## Prerequisites
 
@@ -44,19 +51,19 @@ npm install
 
 ## Running
 
-**Development** (frontend dev server + API server concurrently):
+Development (frontend + API concurrently):
 
 ```bash
 npm run dev:all
 ```
 
-**Production**:
+Production:
 
 ```bash
 npm run start        # builds frontend, then starts Express on port 5000
 ```
 
-Open `http://localhost:5000` (production) or `http://localhost:3000` (dev) and upload your ICD-10-CM `.jsonl` data file when prompted.
+Open `http://localhost:5000` (production) or `http://localhost:3000` (dev) and upload your `.jsonl` data file when prompted.
 
 ## Environment Variables
 
@@ -71,21 +78,22 @@ Open `http://localhost:5000` (production) or `http://localhost:3000` (dev) and u
 ├── server.js            # Express API (search, upload, SSE progress)
 ├── src/
 │   ├── App.jsx          # Root component with routing
-│   ├── components/      # Reusable UI (Search, Header, Sidebar, etc.)
+│   ├── components/      # Search, Header, CodeSidebar, SplashScreen, etc.
 │   ├── contexts/        # ThemeContext (dark/light mode)
-│   ├── pages/           # Route-level pages
-│   └── utils/           # API service layer
+│   ├── pages/           # HomePage, CodeDetailPage
+│   └── utils/           # apiService (fetch wrapper)
+├── scripts/             # Data processing & Electron build helpers
 ├── index.html           # Vite entry point
 ├── tailwind.config.js   # Tailwind + custom medical color palette
 └── vite.config.js       # Vite config with API proxy
 ```
 
-## Known Issues
+## ⚠️ Known Issues
 
-- Some legacy components (`CodeDetailsPage`, `ImportDialog`, `MarkdownRenderer`, `CodeIndex`) reference MUI and other packages not included in `package.json`. These components are unused in the current routing and can be safely removed or migrated to Tailwind.
-- The `CodeDetail.jsx` component fetches from static file paths (`data/index.json`) instead of the MongoDB API — it is superseded by `CodeDetailPage.jsx`.
-- MongoDB must be running before the server starts; there is no embedded/fallback database.
-- File upload has a 500 MB limit; very large datasets may need the limit adjusted in `server.js`.
+- Several legacy components (`CodeDetailsPage`, `CodeIndex`, `ImportDialog`, `MarkdownRenderer`, `CodeSearchResultsPage`) import MUI, Fuse.js, remark-gfm, and react-window which are not in `package.json`. These components are unused in the current routing and can be removed or migrated.
+- The old `CodeDetail.jsx` fetches from static file paths instead of the MongoDB API — it is superseded by `CodeDetailPage.jsx`.
+- MongoDB must be running before the server starts; there is no embedded fallback.
+- File upload limit is 500 MB; adjust in `server.js` for larger datasets.
 
 ## License
 
