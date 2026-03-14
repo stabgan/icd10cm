@@ -1,6 +1,6 @@
 // API Service for communicating with the backend
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = '/api';
 
 // Check if data is loaded on the server
 export async function checkDataLoaded() {
