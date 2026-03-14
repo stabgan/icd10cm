@@ -2,17 +2,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import { resolve } from 'path'
-import fs from 'fs'
-import path from 'path'
-
-// We'll check if terser is available for minification
-let minify = 'esbuild'
-try {
-  require.resolve('terser')
-  minify = 'terser'
-} catch (error) {
-  console.warn('Terser not found, using esbuild for minification')
-}
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -29,7 +18,6 @@ export default defineConfig({
   ],
   build: {
     outDir: 'dist',
-    minify,
     sourcemap: true,
     rollupOptions: {
       input: {
